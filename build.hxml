@@ -1,0 +1,5 @@
+-main Server
+-cp lib
+-cp src/server
+-cp src/client
+-neko server.n

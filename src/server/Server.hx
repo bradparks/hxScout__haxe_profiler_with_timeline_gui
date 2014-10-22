@@ -124,15 +124,14 @@ class Server {
                   start = i+1;
                 }
               }
-              trace("Stack strings now: "+stack_strings.length);
-              for (i in 0...stack_strings.length) {
-                trace(i+": "+stack_strings[i]);
-              }
+              //trace("Stack strings now: "+stack_strings.length);
+              //for (i in 0...stack_strings.length) {
+              //  trace(i+": "+stack_strings[i]);
+              //}
             }
             else if (name==".sampler.sample") {
-              // var value:Map<String,Dynamic> = data["value"];
-              // trace(value["callstack"]);
-              trace(data);
+              var value:Map<String,Dynamic> = data["value"];
+              cur_frame.samples.push(value);
             }
           }
 
@@ -156,6 +155,7 @@ class Frame {
   public var id:Int;
   public var duration:Dynamic;
   public var mem:Map<String, Int>;
+  public var samples:Array<Dynamic>;
   //public var events:Array<Dynamic>;
   #if DEBUG_UNKNOWN
     public var unknown_names:Array<String>;
@@ -173,6 +173,7 @@ class Frame {
     duration.swf = 0;
     duration.unknown = 0;
     mem = new Map<String, Int>();
+    samples = [];
     #if DEBUG_UNKNOWN
       unknown_names = [];
     #end
@@ -187,6 +188,7 @@ class Frame {
           unknown_names:unknown_names,
       #end
       duration:duration,
+      samples:samples,
       mem:mem
     });
   }

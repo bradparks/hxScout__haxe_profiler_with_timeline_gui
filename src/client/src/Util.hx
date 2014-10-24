@@ -53,6 +53,7 @@ class Util {
     input.type = openfl.text.TextFieldType.INPUT;
     cont.addChild(input);
 
+    // TODO: dispose / remove events listeners framework
     input.addEventListener(KeyboardEvent.KEY_DOWN, function(e) {
       if (e.keyCode==13) {
         if (submit!=null) submit(input.text);
@@ -67,15 +68,17 @@ class Util {
     btn.mouseEnabled = true;
     btn.buttonMode = true;
     btn.alpha = 0.5;
+
+    // TODO: dispose / remove events listeners framework
     btn.addEventListener(MouseEvent.MOUSE_OVER, function(e) {
       Actuate.tween(btn, 0.4, { alpha: 1 });
-    }, 1, true);
+    });
     btn.addEventListener(MouseEvent.MOUSE_OUT, function(e) {
       Actuate.tween(btn, 0.3, { alpha: 0.5 });
-    }, 1, true);
+    });
     btn.addEventListener(MouseEvent.CLICK, function(e) {
       if (submit!=null) submit(input.text);
-    }, 1, true);
+    });
     cont.addChild(btn);
 
     var lbl = make_label(">", size, color);
@@ -83,7 +86,10 @@ class Util {
     lbl.mouseEnabled = false;
     cont.addChild(lbl);
 
-    return {cont:cont, input:input };
+    // trace(cont.width); // Not null here
+    var a:Float = cont.width*1.0;
+
+    return {cont:cont, input:input, bug:a };
   }
 
   public static function fade_away(d:DisplayObject,

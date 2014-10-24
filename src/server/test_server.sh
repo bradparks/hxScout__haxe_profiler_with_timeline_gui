@@ -1,2 +1,1 @@
-haxe -debug test_server.hxml
-neko server.n
+haxe -debug test_server.hxml && ./export/Server-debug

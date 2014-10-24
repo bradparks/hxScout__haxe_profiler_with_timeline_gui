@@ -1,3 +1,3 @@
 -main Server
 -cp ../../lib
--neko server.n
+-cpp export

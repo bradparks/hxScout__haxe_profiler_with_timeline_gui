@@ -44,15 +44,15 @@ class Main extends Sprite {
                             trace("Connecting to host="+host+", port="+port);
                             s = setup_socket(host, port, success, err);
                           });
-    lbl.x = -(lbl.width + inp.cont.width)/2;
+
+    // BUG: trace(inp.cont.width);  returns null in neko
+
+    lbl.x = -(lbl.width + inp.bug)/2;
     lbl.y = -lbl.height/2;
     inp.cont.x = lbl.x + lbl.width;
     inp.cont.y = lbl.y;
     addChild(lbl);
     addChild(inp.cont);
-
-    // Auto-focus doesn't seem to be working...
-    stage.focus = inp.input;
   }
 
   function setup_stage()

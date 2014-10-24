@@ -1,5 +1,9 @@
 package;
 
+import sys.net.Socket;
+import amf.io.Amf3Reader;
+import cpp.vm.Thread;
+
 typedef Timing = {
   var delta:Int;
   var span:Int;
@@ -9,6 +13,52 @@ typedef Timing = {
 
 class Server {
   static function main() {
+		var reader = Thread.create(FLMReader.start);
+		reader.sendMessage(Thread.current());
+
+    var s = new Socket();
+    s.bind(new sys.net.Host("localhost"),7935); // hxScout client port
+    s.listen(2);
+
+    var policy = "<policy-file-request/>";
+    var policy_idx = 0;
+
+    while( true ) {
+      trace("Waiting for client on 7935...");
+      var client_socket : Socket = s.accept();
+      trace("-- Connected on 7935, waiting for data");
+      while (true) {
+        var data = client_socket.input.readByte();
+
+        if (policy.charCodeAt(policy_idx)==data) { // <policy-file-request/>
+          policy_idx++;
+          if (policy_idx==policy.length && client_socket.input.readByte()==0) {
+            trace("Got policy file req on 7935");
+            send_policy_file(client_socket); // closes socket
+            break;
+          }
+        } else {
+          policy_idx = 0;
+        }
+      }
+    }
+  }
+
+  public static function send_policy_file(s:Socket)
+  {
+		s.output.writeString('<cross-domain-policy><site-control permitted-cross-domain-policies="master-only"/><allow-access-from domain="*" to-ports="7934,7935"/></cross-domain-policy>');
+		s.output.writeByte(0);
+    s.close();
+  }
+
+}
+
+class FLMReader {
+
+  static public function start()
+  {
+    var main = Thread.readMessage(true);
+
     var frames:Array<Frame> = [];
     var cur_frame = new Frame(0);
     var delta:Int = 0;
@@ -16,14 +66,16 @@ class Server {
     var next_is_as = false;
     var stack_strings:Array<String> = ["1-indexed"];
 
-    var s = new sys.net.Socket();
+    trace("Starting FLM listener...");
+    var s = new Socket();
     s.bind(new sys.net.Host("localhost"),7934); // Default Scout port
-    s.listen(1);
-    trace("Starting server...");
+    s.listen(2);
+
     while( true ) {
-      var socket : sys.net.Socket = s.accept();
+      trace("Waiting for FLM on 7934...");
+      var flm_socket : Socket = s.accept();
       trace(" --- Client connected ---");
-      var r = new amf.io.Amf3Reader(socket.input);
+      var r = new Amf3Reader(flm_socket.input);
       var connected = true;
       while( connected ) {
 
@@ -31,7 +83,23 @@ class Server {
         var data:Map<String, Dynamic> = null;
         try {
           data = r.read();
-        } catch( ex:haxe.io.Eof )  { connected = false; }
+        } catch( e:Dynamic )  {
+          // Handle EOF
+          if (Type.getClass(e)==haxe.io.Eof) {
+            connected = false;
+            flm_socket.close();
+            break;
+          }
+          // Handle flash requests for policy file
+          if ((e+"").indexOf("type-marker: 60")>0) {
+            trace("Got flash policy file request, writing response...");
+            flm_socket.input.readUntil(0);
+            Server.send_policy_file(flm_socket);
+            break;
+          }
+          // Other errors, rethrow
+          throw e;
+        }
 
         if (data!=null) {
           //trace(data);

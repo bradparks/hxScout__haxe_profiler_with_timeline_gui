@@ -7,7 +7,7 @@ class Server {
   static function main() {
     trace("Starting telemetry listener...");
     var s = new Socket();
-    s.bind(new sys.net.Host("localhost"),7934); // Default Scout port
+    s.bind(new sys.net.Host("0.0.0.0"),7934); // Default Scout port
     s.listen(2);
 
     while( true ) {

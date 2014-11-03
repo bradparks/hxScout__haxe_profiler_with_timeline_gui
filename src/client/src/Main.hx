@@ -12,13 +12,13 @@ class Main extends Sprite {
     super();
 
     setup_stage();
-    request_hostname(function(s) {
+    setup_server_socket(function(s) {
       trace("Got socket: "+s);
-      
+      setup_frame_data_receiver(s);
     });
   }
 
-  function request_hostname(callback)
+  function setup_server_socket(callback)
   {
     var lbl = Util.make_label("Attach to hxScout server at: ", 17);
     var inp:Dynamic = null;
@@ -28,11 +28,11 @@ class Main extends Sprite {
                             function success() {
                               Util.fade_away(lbl);
                               Util.fade_away(inp.cont).then(function() {
+                                inp.cont.parent.removeChild(inp.cont);
                                 callback(s);
                               });
                             }
                             function err() {
-                              trace("Shaking cont!");
                               Util.shake(inp.cont);
                             }
                             var host = hostname;
@@ -99,4 +99,64 @@ class Main extends Sprite {
     return s;
   }
 
+  function setup_frame_data_receiver(server:Socket) {
+    var frame_data_length = 0;
+
+    // Probably not necessary...
+    var keepalive = GlobalTimer.setInterval(function() { server.writeInt(0); }, 1000);
+
+    function on_enter_frame(e:Event) {
+      while (true) { // process multiple frame_data's per frame
+        server.endian = openfl.utils.Endian.LITTLE_ENDIAN;
+        if (server.bytesAvailable>4 && frame_data_length==0) {
+          frame_data_length = server.readInt();
+        }
+        if (server.bytesAvailable>frame_data_length && frame_data_length>0) {
+          var frame_data = haxe.Json.parse(server.readUTFBytes(frame_data_length));
+          frame_data_length = 0;
+          trace(frame_data);
+        } else {
+          break;
+        }
+      }
+
+    }
+
+    stage.addEventListener(Event.ENTER_FRAME, on_enter_frame);
+  }
+
 }
+
+
+class FLMClient {
+  private var _server:Socket;
+  private var _frame_data_length = 0;
+
+  public function new(s:Socket, stage:Stage) {
+    _server = s;
+    _server.endian = openfl.utils.Endian.LITTLE_ENDIAN;
+
+    GlobalTimer.setInterval(function() { _server.writeInt(0); }, 1000);
+
+    function on_enter_frame(e:Event) {
+      while (true) { // process multiple frame_data's per frame
+        _server.endian = openfl.utils.Endian.LITTLE_ENDIAN;
+        if (_server.bytesAvailable>4 && _frame_data_length==0) {
+          _frame_data_length = _server.readInt();
+        }
+        if (_server.bytesAvailable>_frame_data_length && _frame_data_length>0) {
+          var frame_data = haxe.Json.parse(_server.readUTFBytes(_frame_data_length));
+          _frame_data_length = 0;
+          trace(frame_data);
+        } else {
+          break;
+        }
+      }
+
+    }
+
+    stage.addEventListener(Event.ENTER_FRAME, on_enter_frame);
+
+  }
+}
+

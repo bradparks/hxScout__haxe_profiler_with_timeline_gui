@@ -3,6 +3,7 @@ package;
 import sys.net.Socket;
 import amf.io.Amf3Reader;
 import cpp.vm.Thread;
+import haxe.io.*;
 
 typedef Timing = {
   var delta:Int;
@@ -19,6 +20,7 @@ class Server {
     var s = new Socket();
     s.bind(new sys.net.Host("localhost"),7935); // hxScout client port
     s.listen(2);
+    s.setBlocking(true);
 
     var policy = "<policy-file-request/>";
     var policy_idx = 0;
@@ -27,8 +29,26 @@ class Server {
       trace("Waiting for client on 7935...");
       var client_socket : Socket = s.accept();
       trace("-- Connected on 7935, waiting for data");
+      client_socket.setBlocking(false);
       while (true) {
-        var data = client_socket.input.readByte();
+        var data = 0;
+        try {
+          data = client_socket.input.readByte();
+          trace(ts()+"Read data from client: "+data);
+        } catch (e:Dynamic) {
+          if (Type.getClass(e)==haxe.io.Eof) {
+            trace("Client disconnected!");
+            client_socket.close();
+            break;
+          }
+          else if (e=="Blocked") {
+						// no data from client
+					}
+          else {
+            // Unknown exception, rethrow
+            throw e;
+          }
+        }
 
         if (policy.charCodeAt(policy_idx)==data) { // <policy-file-request/>
           policy_idx++;
@@ -40,8 +60,22 @@ class Server {
         } else {
           policy_idx = 0;
         }
+
+        var frame_data = Thread.readMessage(false);
+        if (frame_data!=null) {
+          var b = Bytes.ofString(frame_data);
+          trace("Writing frame_data length="+b.length);
+          client_socket.output.writeInt32(b.length);
+          client_socket.output.writeBytes(b, 0, b.length);
+        }
+
       }
     }
+  }
+
+  static var t0:Float = Date.now().getTime();
+  static function ts():String {
+    return (Date.now().getTime()-t0)/1000.0+" s: ";
   }
 
   public static function send_policy_file(s:Socket)
@@ -57,7 +91,7 @@ class FLMReader {
 
   static public function start()
   {
-    var main = Thread.readMessage(true);
+    var client_writer = Thread.readMessage(true);
 
     var frames:Array<Frame> = [];
     var cur_frame = new Frame(0);
@@ -209,6 +243,7 @@ class FLMReader {
             } else {
               cur_frame.timing = null; // release timing events
               Sys.stdout().writeString(cur_frame.to_json()+",\n");
+              client_writer.sendMessage(cur_frame.to_json());
               frames.push(cur_frame);
               cur_frame = new Frame(cur_frame.id+1);
             }

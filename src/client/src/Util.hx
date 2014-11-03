@@ -4,7 +4,7 @@ import flash.display.*;
 import flash.text.*;
 import flash.events.*;
 import flash.filters.*;
-
+import haxe.ds.*;
 import openfl.Assets;
 
 import motion.Actuate;
@@ -54,7 +54,8 @@ class Util {
     cont.addChild(input);
 
     // TODO: dispose / remove events listeners framework
-    input.addEventListener(KeyboardEvent.KEY_DOWN, function(e) {
+    AEL.add(input, KeyboardEvent.KEY_DOWN, function(ev) {
+      var e = cast(ev, KeyboardEvent);
       if (e.keyCode==13) {
         if (submit!=null) submit(input.text);
       }
@@ -70,13 +71,14 @@ class Util {
     btn.alpha = 0.5;
 
     // TODO: dispose / remove events listeners framework
-    btn.addEventListener(MouseEvent.MOUSE_OVER, function(e) {
+    
+    AEL.add(btn, MouseEvent.MOUSE_OVER, function(e) {
       Actuate.tween(btn, 0.4, { alpha: 1 });
     });
-    btn.addEventListener(MouseEvent.MOUSE_OUT, function(e) {
+    AEL.add(btn, MouseEvent.MOUSE_OUT, function(e) {
       Actuate.tween(btn, 0.3, { alpha: 0.5 });
     });
-    btn.addEventListener(MouseEvent.CLICK, function(e) {
+    AEL.add(btn, MouseEvent.CLICK, function(e) {
       if (submit!=null) submit(input.text);
     });
     cont.addChild(btn);
@@ -113,11 +115,13 @@ class Util {
   public static function shake(d:DisplayObject)
   {
     var orig_x:Float = d.x;
-    Actuate.tween(d, 0.3*0.1, { x: orig_x-10 });
-    Actuate.tween(d, 0.3*0.15, { x: orig_x+10 }, false).delay(0.2);
-    Actuate.tween(d, 0.3*0.2, { x: orig_x-10 }, false).delay(0.4);
-    Actuate.tween(d, 0.3*0.15, { x: orig_x+10 }, false).delay(0.6);
-    Actuate.tween(d, 0.3*0.1, { x: orig_x }, false).delay(0.8);
+    var dt=0.0;
+    var t=0.0;
+    Actuate.tween(d, dt=0.4*0.1, { x: orig_x-6 });
+    Actuate.tween(d, dt=0.4*0.15, { x: orig_x+8 }, false).delay(t+=dt);
+    Actuate.tween(d, dt=0.4*0.2, { x: orig_x-8 }, false).delay(t+=dt);
+    Actuate.tween(d, dt=0.4*0.3, { x: orig_x+6 }, false).delay(t+=dt);
+    Actuate.tween(d, dt=0.4*0.15, { x: orig_x }, false).delay(t+=dt);
   }
                                    
 

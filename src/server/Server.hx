@@ -13,14 +13,14 @@ typedef Timing = {
 }
 
 class Server {
-  static function main() {
+  static public function main() {
     trace("hxScout");
 
 		var listener = Thread.create(FLMListener.start);
 		listener.sendMessage(Thread.current());
 
     var s = new Socket();
-    s.bind(new sys.net.Host("localhost"),7935); // hxScout client port
+    s.bind(new sys.net.Host("localhost"),7933); // hxScout client port
     s.listen(2);
     s.setBlocking(true);
 
@@ -28,9 +28,9 @@ class Server {
     var policy_idx = 0;
 
     while( true ) {
-      trace("Waiting for client on 7935...");
+      trace("Waiting for client on 7933...");
       var client_socket : Socket = s.accept();
-      trace("-- Connected on 7935, waiting for data");
+      trace("-- Connected on 7933, waiting for data");
       client_socket.setBlocking(false);
       while (true) {
         var data = 0;
@@ -55,7 +55,7 @@ class Server {
         if (policy.charCodeAt(policy_idx)==data) { // <policy-file-request/>
           policy_idx++;
           if (policy_idx==policy.length && client_socket.input.readByte()==0) {
-            trace("Got policy file req on 7935");
+            trace("Got policy file req on 7933");
             send_policy_file(client_socket); // closes socket
             break;
           }
@@ -85,7 +85,7 @@ class Server {
 
   public static function send_policy_file(s:Socket)
   {
-		s.output.writeString('<cross-domain-policy><site-control permitted-cross-domain-policies="master-only"/><allow-access-from domain="*" to-ports="7934,7935"/></cross-domain-policy>');
+		s.output.writeString('<cross-domain-policy><site-control permitted-cross-domain-policies="master-only"/><allow-access-from domain="*" to-ports="7934,7933"/></cross-domain-policy>');
 		s.output.writeByte(0);
     s.close();
   }
@@ -104,32 +104,14 @@ class FLMListener {
     s.bind(new sys.net.Host("localhost"),7934); // Default Scout port
     s.listen(8);
 
-    while( true ) {
-      trace("Waiting for FLM on 7934...");
-      var flm_socket : Socket = s.accept();
-      var inst_id:Int = (next_inst_id++);
-      var reader = Thread.create(FLMReader.start);
-			reader.sendMessage(flm_socket);
-			reader.sendMessage(inst_id);
-			reader.sendMessage(client_writer);
-    }
-  }
-}
+    trace("Waiting for FLM on 7934...");
+    var flm_socket : Socket = s.accept();
+    var inst_id:Int = (next_inst_id++);
 
-class FLMReader {
- 
-	static public function start()
-	{
-		var flm_socket:Socket = Thread.readMessage(true);
-		var inst_id:Int = Thread.readMessage(true);
-		var client_writer:Thread = Thread.readMessage(true);
-    new FLMReader(flm_socket, inst_id, client_writer);
-  }
+    // Launch next listener
+		// var listener = Thread.create(FLMListener.start);
+		// listener.sendMessage(client_writer);
 
-  public function new(flm_socket:Socket,
-                      inst_id:Int,
-                      client_writer:Thread)
-  {
 		trace("Starting FLMReader["+inst_id+"]...");
  
 		var frames:Array<Frame> = [];
@@ -164,6 +146,7 @@ class FLMReader {
 					break;
 				}
 				// Other errors, rethrow
+        trace("Uh oh, rethrowing: "+e);
 				throw e;
 			}
  

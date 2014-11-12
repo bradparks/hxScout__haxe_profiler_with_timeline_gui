@@ -17,19 +17,37 @@ class Main extends Sprite {
     super();
 
     setup_stage();
-    setup_server_socket(function(s) {
+
+    function on_server_connected(s:Socket) {
       trace("Got socket: "+s);
       addChild(gui = new HXScoutClientGUI());
       center();
       setup_frame_data_receiver(s);
-    });
+    }
+
+    // CPP, start server thread automatically, failover to request
+    #if cpp
+      var listener = cpp.vm.Thread.create(Server.main);
+      var s:Socket = null;
+      Sys.sleep(0.2);
+      s = setup_socket("localhost", 7933,
+                       function() {
+                         on_server_connected(s);
+                       },
+                       function() {
+                         ui_server_request(on_server_connected);
+                       });
+    #else
+      ui_server_request(on_server_connected);
+    #end
+
   }
 
-  function setup_server_socket(callback)
+  function ui_server_request(callback)
   {
     var lbl = Util.make_label("Attach to hxScout server at: ", 17);
     var inp:Dynamic = null;
-    inp = Util.make_input(200, 17, 0xaaaaaa, "localhost:7935",
+    inp = Util.make_input(200, 17, 0xaaaaaa, "localhost:7933",
                           function(hostname) {
                             var s:Socket = null;
                             function success() {
@@ -43,7 +61,7 @@ class Main extends Sprite {
                               Util.shake(inp.cont);
                             }
                             var host = hostname;
-                            var port:Int = 7935;
+                            var port:Int = 7933;
                             if (~/:\d+$/.match(host)) {
                               host = ~/:\d+$/.replace(hostname, "");
                               port = Std.parseInt(~/.*:(\d+)/.replace(hostname, "$1"));
@@ -183,7 +201,11 @@ class HXScoutClientGUI extends Sprite
 
   private var layout = {
     PAD:2,
-    TH:150
+    TH:150,
+    HZOOM:6,
+    VZOOM:3,
+    TSCALE:1000,
+    MSCALE:400
   }
 
   public function resize(w:Float, h:Float)
@@ -234,8 +256,6 @@ class HXScoutClientGUI extends Sprite
     if (active_session<0) return;
     var i=0;
     var session:FLMSession = sessions[active_session];
-    var hzoom = 6;
-    var vzoom = 3;
     for (i in (last_frame_drawn+1)...session.frames.length) {
       var frame = session.frames[i];
 
@@ -247,26 +267,44 @@ class HXScoutClientGUI extends Sprite
         }
       }
 
-      trace(" -- Drawing "+session.inst_id+":"+frame.id);
-      trace(frame);
-      var s:Shape = new Shape();
-      s.graphics.beginFill(0x444444);
-      s.graphics.drawRect(0,0,hzoom-1,vzoom*frame.duration.total/1000);
-      s.x = Std.parseInt(frame.id)*hzoom;
-      s.y = -s.height;
-      timing_pane.addChild(s);
+      trace(" -- Drawing ["+session.inst_id+"]:"+frame.id);
+      //trace(frame);
+
+      add_rect(i, timing_pane, frame.duration.total/layout.TSCALE, 0x444444, false);
+      add_rect(i, timing_pane, frame.duration.gc/layout.TSCALE, 0xdd5522, true);
+      add_rect(i, timing_pane, frame.duration.as/layout.TSCALE, 0x2288cc, true);
+      add_rect(i, timing_pane, frame.duration.rend/layout.TSCALE, 0x66aa66, true);
+      add_rect(i, timing_pane, frame.duration.other/layout.TSCALE, 0xaa4488, true);
 
       if (!session.temp_mem.exists("total")) continue;
 
-      s = new Shape();
-      s.graphics.beginFill(0x444444);
-      s.graphics.drawRect(0,0,hzoom-1,vzoom*session.temp_mem.get("total")/500);
-      s.x = Std.parseInt(frame.id)*hzoom;
-      s.y = -s.height;
-      memory_pane.addChild(s);
+      trace(session.temp_mem);
+
+      add_rect(i, memory_pane, session.temp_mem.get("total")/layout.MSCALE, 0x444444, false);
+      add_rect(i, memory_pane, session.temp_mem.get("managed.used")/layout.MSCALE, 0x227788, true);
+      add_rect(i, memory_pane, session.temp_mem.get("bitmap.display")/layout.MSCALE, 0x22aa99, true);
+
+      //var s:Shape = new Shape();
+      //s.graphics.beginFill(0x444444);
+      //s.graphics.drawRect(0,0,layout.HZOOM-1,layout.VZOOM*session.temp_mem.get("total")/500);
+      //s.x = Std.parseInt(frame.id)*layout.HZOOM;
+      //s.y = -s.height;
+      //memory_pane.addChild(s);
 
     }
     last_frame_drawn = session.frames.length-1;
+  }
+
+  private var stack_y:Float = 0;
+  private inline function add_rect(id:Int, pane:Sprite, value:Float, color:Int, stack:Bool) {
+    if (!stack) stack_y = 0;
+    var s:Shape = new Shape();
+    s.graphics.beginFill(color);
+    s.graphics.drawRect(0,0,layout.HZOOM-1,layout.VZOOM*value);
+    s.x = id*layout.HZOOM;
+    s.y = -s.height-stack_y;
+    pane.addChild(s);
+    if (stack) stack_y += s.height;
   }
 
 }

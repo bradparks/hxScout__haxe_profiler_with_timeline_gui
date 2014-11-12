@@ -20,7 +20,7 @@ class Server {
 		listener.sendMessage(Thread.current());
 
     var s = new Socket();
-    s.bind(new sys.net.Host("localhost"),7933); // hxScout client port
+    s.bind(new sys.net.Host("0.0.0.0"),7933); // hxScout client port
     s.listen(2);
     s.setBlocking(true);
 
@@ -101,7 +101,7 @@ class FLMListener {
 
     trace("Starting FLM listener...");
     var s = new Socket();
-    s.bind(new sys.net.Host("localhost"),7934); // Default Scout port
+    s.bind(new sys.net.Host("0.0.0.0"),7934); // Default Scout port
     s.listen(8);
 
     trace("Waiting for FLM on 7934...");

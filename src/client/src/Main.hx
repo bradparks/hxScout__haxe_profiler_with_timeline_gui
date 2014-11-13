@@ -20,7 +20,7 @@ class Main extends Sprite {
 
     function on_server_connected(s:Socket) {
       trace("Got socket: "+s);
-      addChild(gui = new HXScoutClientGUI());
+      addChildAt(gui = new HXScoutClientGUI(), 0);
       center();
       setup_frame_data_receiver(s);
     }
@@ -149,6 +149,9 @@ class Main extends Sprite {
             gui.add_session(flm_sessions.get(inst_id));
           }
           flm_sessions.get(inst_id).receive_frame_data(frame_data);
+          if (frame_data.session_name!=null) {
+            gui.update_name(frame_data.session_name, frame_data.inst_id);
+          }
         } else {
           break;
         }
@@ -165,15 +168,21 @@ class FLMSession {
   public var frames:Array<Dynamic> = [];
   public var inst_id:String;
   public var temp_mem:StringMap<Int>;
+  public var name:String;
 
   public function new(iid:String)
   {
     inst_id = iid;
+    name = inst_id;
   }
 
   public function receive_frame_data(frame_data)
   {
-    frames.push(frame_data);
+    if (frame_data.session_name!=null) {
+      name = frame_data.session_name;
+    } else {
+      frames.push(frame_data);
+    }
   }
 
 }
@@ -181,8 +190,10 @@ class FLMSession {
 class HXScoutClientGUI extends Sprite
 {
   private var sessions = [];
+  private var nav_pane:Sprite;
   private var timing_pane:Sprite;
   private var memory_pane:Sprite;
+  private var session_pane:Sprite;
   private var active_session = -1;
   private var last_frame_drawn = -1;
 
@@ -190,42 +201,108 @@ class HXScoutClientGUI extends Sprite
   {
     super();
 
+    nav_pane = new Sprite();
     timing_pane = new Sprite();
     memory_pane = new Sprite();
+    session_pane = new Sprite();
 
+    //timing_pane.cacheAsBitmap = true;
+    //memory_pane.cacheAsBitmap = true;
+
+    addChild(nav_pane);
     addChild(timing_pane);
     addChild(memory_pane);
+    addChild(session_pane);
+
+    AEL.add(nav_pane, MouseEvent.MOUSE_DOWN, handle_nav_start);
 
     addEventListener(Event.ENTER_FRAME, on_enter_frame);
   }
 
+  function handle_nav_start(e:Event)
+  {
+    stage.addEventListener(MouseEvent.MOUSE_MOVE, handle_nav_move);
+    stage.addEventListener(MouseEvent.MOUSE_UP, handle_nav_stop);
+
+    nav_to(nav_pane.mouseX);
+  }
+
+  function handle_nav_stop(e:Event)
+  {
+    stage.removeEventListener(MouseEvent.MOUSE_MOVE, handle_nav_move);
+    stage.removeEventListener(MouseEvent.MOUSE_UP, handle_nav_stop);
+  }
+
+  function handle_nav_move(e:Event)
+  {
+    nav_to(nav_pane.mouseX);
+  }
+
+  function nav_to(x:Float)
+  {
+    trace("Nav to: "+x);
+    timing_pane.scrollRect.x = -x;
+
+    var r = new flash.geom.Rectangle();
+    r.copyFrom(timing_pane.scrollRect);
+    r.x = x*(layout.frame_width);
+    timing_pane.scrollRect = r;
+    memory_pane.scrollRect = r;
+  }
+
   private var layout = {
+    nav:{
+      height:50,
+    },
+    timing:{
+      height:150,
+      scale:300
+    },
+    session:{
+      width:200,
+    },
     PAD:2,
-    TH:150,
-    HZOOM:6,
-    VZOOM:3,
-    TSCALE:1000,
-    MSCALE:400
+    frame_width:6,
+    MSCALE:100
   }
 
   public function resize(w:Float, h:Float)
   {
-    timing_pane.y = -h/2+layout.PAD;
-    timing_pane.x = -w/2+layout.PAD;
-    timing_pane.graphics.clear();
-    timing_pane.graphics.lineStyle(1, 0x888888);
-    timing_pane.graphics.beginFill(0x111111);
-    timing_pane.graphics.drawRect(0,-layout.TH,w-2*layout.PAD,layout.TH);
-    timing_pane.scrollRect = new flash.geom.Rectangle(0,-layout.TH,w-2*layout.PAD,layout.TH);
+    var p = layout.PAD;
 
-    memory_pane.y = timing_pane.y + layout.PAD*2 + layout.TH;
-    memory_pane.x = timing_pane.x;
-    memory_pane.graphics.clear();
-    memory_pane.graphics.lineStyle(1, 0x888888);
-    memory_pane.graphics.beginFill(0x111111);
-    memory_pane.graphics.drawRect(0,-layout.TH,w-2*layout.PAD,layout.TH);
-    memory_pane.scrollRect = new flash.geom.Rectangle(0,-layout.TH,w-2*layout.PAD,layout.TH);
+    var y = p;
+    draw_pane(w, h, nav_pane,     layout.session.width+2*p, y, w-(layout.session.width+p*3), layout.nav.height,    0, false);
+    y += p + layout.nav.height;
+    draw_pane(w, h, timing_pane,  layout.session.width+2*p, y, w-(layout.session.width+p*3), layout.timing.height, 0);
+    y += p + layout.timing.height;
+    draw_pane(w, h, memory_pane,  layout.session.width+2*p, y, w-(layout.session.width+p*3), layout.timing.height, 0);
+    draw_pane(w, h, session_pane, p,       p, (layout.session.width-p*2),   h-2*p,                0, false);
 
+  }
+
+  inline function draw_pane(stage_w:Float, stage_h:Float, pane:Sprite, x:Float, y:Float, w:Float, h:Float, scroll:Float, bottom_aligned:Bool=true)
+  {
+    pane.x = -stage_w/2 + x;
+    pane.y = -stage_h/2 + y;
+    if (bottom_aligned) {
+      pane.graphics.drawRect(0,-h,w,h);
+      pane.scrollRect = new flash.geom.Rectangle(0,-h,w,h);
+    } else {
+      pane.graphics.clear();
+      pane.graphics.lineStyle(1, 0x888888);
+      pane.graphics.beginFill(0x111111);
+      pane.graphics.drawRect(0,0,w,h);
+      pane.scrollRect = new flash.geom.Rectangle(0,0,w,h);
+    }
+  }
+
+  public function update_name(name:String, inst_id:String)
+  {
+    trace("Set name: "+inst_id+", "+name);
+    var lbl = Util.make_label(name, 15);
+    var ses:Sprite = cast(session_pane.getChildAt(Std.parseInt(inst_id)));
+    lbl.y = ses.height/2-lbl.height/2;
+    ses.addChild(lbl);
   }
 
   public function add_session(flm_session:FLMSession)
@@ -235,6 +312,16 @@ class HXScoutClientGUI extends Sprite
     if (active_session<0) {
       set_active_session(sessions.length-1);
     }
+
+    var s:Sprite = new Sprite();
+    s.graphics.beginFill(0x444444);
+    s.graphics.lineStyle(4, 0x555555);
+    s.graphics.drawRect(0,0,layout.session.width-2*layout.PAD,46);
+    s.buttonMode = true;
+    AEL.add(s, MouseEvent.CLICK, function(e) { set_active_session(s.parent.getChildIndex(s)); });
+    //s.x = layout.PAD;
+    s.y = (sessions.length-1)*46;
+    session_pane.addChild(s);
   }
 
   public function set_active_session(n:Int)
@@ -247,6 +334,16 @@ class HXScoutClientGUI extends Sprite
 
     var session:FLMSession = sessions[active_session];
     session.temp_mem = new StringMap<Int>();
+
+    reset_nav_pane();
+    resize(stage.stageWidth, stage.stageHeight);
+  }
+
+  function reset_nav_pane()
+  {
+    // dispose?
+    while (nav_pane.numChildren>0) nav_pane.removeChildAt(0);
+    nav_pane.addChild(new Bitmap(new BitmapData(Std.int(nav_pane.width), Std.int(nav_pane.height), true, 0x0)));
   }
 
   var mem_types = ["used","telemetry.overhead","managed.used","managed","total"];
@@ -267,18 +364,18 @@ class HXScoutClientGUI extends Sprite
         }
       }
 
-      trace(" -- Drawing ["+session.inst_id+"]:"+frame.id);
+      //trace(" -- Drawing ["+session.inst_id+"]:"+frame.id);
       //trace(frame);
 
-      add_rect(i, timing_pane, frame.duration.total/layout.TSCALE, 0x444444, false);
-      add_rect(i, timing_pane, frame.duration.gc/layout.TSCALE, 0xdd5522, true);
-      add_rect(i, timing_pane, frame.duration.as/layout.TSCALE, 0x2288cc, true);
-      add_rect(i, timing_pane, frame.duration.rend/layout.TSCALE, 0x66aa66, true);
-      add_rect(i, timing_pane, frame.duration.other/layout.TSCALE, 0xaa4488, true);
+      add_rect(i, timing_pane, frame.duration.total/layout.timing.scale, 0x444444, false);
+      add_rect(i, timing_pane, frame.duration.gc/layout.timing.scale, 0xdd5522, true);
+      add_rect(i, timing_pane, frame.duration.other/layout.timing.scale, 0xaa4488, true);
+      add_rect(i, timing_pane, frame.duration.as/layout.timing.scale, 0x2288cc, true);
+      add_rect(i, timing_pane, frame.duration.rend/layout.timing.scale, 0x66aa66, true);
 
       if (!session.temp_mem.exists("total")) continue;
 
-      trace(session.temp_mem);
+      //trace(session.temp_mem);
 
       add_rect(i, memory_pane, session.temp_mem.get("total")/layout.MSCALE, 0x444444, false);
       add_rect(i, memory_pane, session.temp_mem.get("managed.used")/layout.MSCALE, 0x227788, true);
@@ -286,8 +383,8 @@ class HXScoutClientGUI extends Sprite
 
       //var s:Shape = new Shape();
       //s.graphics.beginFill(0x444444);
-      //s.graphics.drawRect(0,0,layout.HZOOM-1,layout.VZOOM*session.temp_mem.get("total")/500);
-      //s.x = Std.parseInt(frame.id)*layout.HZOOM;
+      //s.graphics.drawRect(0,0,layout.frame_width-1,session.temp_mem.get("total")/500);
+      //s.x = Std.parseInt(frame.id)*layout.frame_width;
       //s.y = -s.height;
       //memory_pane.addChild(s);
 
@@ -300,11 +397,19 @@ class HXScoutClientGUI extends Sprite
     if (!stack) stack_y = 0;
     var s:Shape = new Shape();
     s.graphics.beginFill(color);
-    s.graphics.drawRect(0,0,layout.HZOOM-1,layout.VZOOM*value);
-    s.x = id*layout.HZOOM;
+    s.graphics.drawRect(0,0,layout.frame_width-1,value);
+    s.x = id*layout.frame_width;
     s.y = -s.height-stack_y;
     pane.addChild(s);
     if (stack) stack_y += s.height;
+
+    if (pane==timing_pane) {
+      var m = new flash.geom.Matrix();
+      m.translate(s.x, 0);
+      m.scale(1/layout.frame_width, -0.5);
+      m.translate(0, layout.nav.height);
+      cast(nav_pane.getChildAt(0)).bitmapData.draw(s, m);
+    }
   }
 
 }

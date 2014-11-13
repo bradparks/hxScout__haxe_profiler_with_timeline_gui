@@ -66,7 +66,7 @@ class Server {
         var frame_data = Thread.readMessage(false);
         if (frame_data!=null) {
           var b = Bytes.ofString(frame_data);
-          trace("Writing frame_data length="+b.length);
+          //trace("Writing frame_data length="+b.length);
           client_socket.output.writeInt32(b.length);
           client_socket.output.writeBytes(b, 0, b.length);
         } else {
@@ -109,8 +109,9 @@ class FLMListener {
     var inst_id:Int = (next_inst_id++);
 
     // Launch next listener
-		// var listener = Thread.create(FLMListener.start);
-		// listener.sendMessage(client_writer);
+    s.close();
+    var listener = Thread.create(FLMListener.start);
+    listener.sendMessage(client_writer);
 
 		trace("Starting FLMReader["+inst_id+"]...");
  
@@ -154,6 +155,10 @@ class FLMListener {
 				//trace(data);
 				var name:String = cast(data['name'], String);
  
+        if (name=='.swf.name') {
+          client_writer.sendMessage(haxe.Json.stringify({session_name:data['value'], inst_id:inst_id}));
+        }
+
 				// - - - - - - - - - - - -
 				// Timing / Span / Delta
 				// - - - - - - - - - - - -
@@ -257,7 +262,7 @@ class FLMListener {
 						first_enter = false;
 					} else {
 						cur_frame.timing = null; // release timing events
-						Sys.stdout().writeString(cur_frame.to_json()+",\n");
+						//Sys.stdout().writeString(cur_frame.to_json()+",\n");
 						client_writer.sendMessage(cur_frame.to_json());
 						frames.push(cur_frame);
 						cur_frame = new Frame(cur_frame.id+1, inst_id);
@@ -296,7 +301,6 @@ class Frame {
     #if DEBUG_UNKNOWN
       unknown_names = [];
     #end
-    //events = [];
   }
 
   public function to_json():String

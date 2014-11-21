@@ -56,7 +56,7 @@ class Server {
           policy_idx++;
           if (policy_idx==policy.length && client_socket.input.readByte()==0) {
             trace("Got policy file req on 7933");
-            send_policy_file(client_socket); // closes socket
+            FLMUtil.send_policy_file(client_socket); // closes socket
             break;
           }
         } else {
@@ -83,13 +83,16 @@ class Server {
     return (t)+" s: ";
   }
 
+}
+
+class FLMUtil
+{
   public static function send_policy_file(s:Socket)
   {
 		s.output.writeString('<cross-domain-policy><site-control permitted-cross-domain-policies="master-only"/><allow-access-from domain="*" to-ports="7934,7933"/></cross-domain-policy>');
 		s.output.writeByte(0);
     s.close();
   }
-
 }
 
 class FLMListener {
@@ -143,7 +146,7 @@ class FLMListener {
 				if ((e+"").indexOf("type-marker: 60")>0) {
 					trace("Got flash policy file request, writing response...");
 					flm_socket.input.readUntil(0);
-					Server.send_policy_file(cast(flm_socket));
+					FLMUtil.send_policy_file(cast(flm_socket));
 					break;
 				}
 				// Other errors, rethrow
@@ -237,12 +240,15 @@ class FLMListener {
 				// - - - - - - - - - - - -
 				if (name.indexOf(".sampler.")==0) {
 					if (name==".sampler.methodNameMap") {
+            if (cur_frame.push_stack_strings==null) cur_frame.push_stack_strings = [];
 						var bytes = cast(data["value"], haxe.io.Bytes);
 						var start=0;
 						for (i in 0...bytes.length) {
 							var b = bytes.get(i);
 							if (b==0) {
-								stack_strings.push(bytes.getString(start, i-start));
+                var stack_string:String = bytes.getString(start, i-start);
+                cur_frame.push_stack_strings.push(stack_string);
+								stack_strings.push(stack_string);
 								start = i+1;
 							}
 						}
@@ -279,6 +285,7 @@ class Frame {
   public var duration:Dynamic;
   public var mem:Map<String, Int>;
   public var samples:Array<Dynamic>;
+  public var push_stack_strings:Array<String>;
   //public var events:Array<Dynamic>;
   #if DEBUG_UNKNOWN
     public var unknown_names:Array<String>;
@@ -298,6 +305,7 @@ class Frame {
     duration.unknown = 0;
     mem = new Map<String, Int>();
     samples = [];
+    push_stack_strings = null;
     #if DEBUG_UNKNOWN
       unknown_names = [];
     #end
@@ -312,6 +320,7 @@ class Frame {
           unknown_names:unknown_names,
       #end
       duration:duration,
+      push_stack_strings:push_stack_strings,
       samples:samples,
       mem:mem
     });

@@ -3,6 +3,8 @@ hxScout
 
 A Haxe Scout Alternative
 
+[<img src="https://raw.githubusercontent.com/jcward/hxScout/master/hxscout.png" width=240>](https://raw.githubusercontent.com/jcward/hxScout/master/hxscout.png)
+
 What
 ----
 hxScout aims to be a free, cross-platform alternative to Adobe Scout providing

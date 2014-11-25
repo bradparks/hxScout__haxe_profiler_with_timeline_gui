@@ -254,12 +254,14 @@ class FLMListener {
 						}
 						//trace("Stack strings now: "+stack_strings.length);
 						//for (i in 0...stack_strings.length) {
-						//	trace(i+": "+stack_strings[i]);
+						//  trace(i+": "+stack_strings[i]);
 						//}
 					}
 					else if (name==".sampler.sample") {
 						var value:Map<String,Dynamic> = data["value"];
+            if (cur_frame.samples==null) cur_frame.samples = [];
 						cur_frame.samples.push(value);
+            //trace(value);
 					}
 				}
  
@@ -304,7 +306,7 @@ class Frame {
     duration.swf = 0;
     duration.unknown = 0;
     mem = new Map<String, Int>();
-    samples = [];
+    samples = null;
     push_stack_strings = null;
     #if DEBUG_UNKNOWN
       unknown_names = [];

@@ -169,6 +169,7 @@ class FLMSession {
   public var inst_id:String;
   public var temp_mem:StringMap<Int>;
   public var name:String;
+  public var stack_strings:Array<String> = ["1-indexed"];
 
   public function new(iid:String)
   {
@@ -181,6 +182,15 @@ class FLMSession {
     if (frame_data.session_name!=null) {
       name = frame_data.session_name;
     } else {
+      if (frame_data.push_stack_strings!=null) {
+        var strings:Array<String> = frame_data.push_stack_strings;
+        for (str in strings) {
+          stack_strings.push(str);
+        }
+      }
+      //if (frame_data.samples!=null) {
+      //  trace(haxe.Json.stringify(frame_data.samples, null, "  "));
+      //}
       frames.push(frame_data);
     }
   }
@@ -190,64 +200,41 @@ class FLMSession {
 class HXScoutClientGUI extends Sprite
 {
   private var sessions = [];
-  private var nav_pane:Sprite;
-  private var timing_pane:Sprite;
-  private var memory_pane:Sprite;
-  private var session_pane:Sprite;
+
+  private var nav_pane:Pane;
+  private var summary_pane:Pane;
+  private var timing_pane:Pane;
+  private var memory_pane:Pane;
+  private var session_pane:Pane;
+  private var detail_pane:Pane;
+
   private var active_session = -1;
   private var last_frame_drawn = -1;
+
+  private var nav_ctrl:NavController;
 
   public function new()
   {
     super();
 
-    nav_pane = new Sprite();
-    timing_pane = new Sprite();
-    memory_pane = new Sprite();
-    session_pane = new Sprite();
-
-    //timing_pane.cacheAsBitmap = true;
-    //memory_pane.cacheAsBitmap = true;
+    nav_pane = new Pane();
+    summary_pane = new Pane();
+    timing_pane = new Pane(true);
+    memory_pane = new Pane(true);
+    session_pane = new Pane();
+    detail_pane = new Pane();
 
     addChild(nav_pane);
+    addChild(summary_pane);
     addChild(timing_pane);
     addChild(memory_pane);
     addChild(session_pane);
+    addChild(detail_pane);
 
-    AEL.add(nav_pane, MouseEvent.MOUSE_DOWN, handle_nav_start);
+    nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane);
+    //AEL.add(timing_pane, MouseEvent.MOUSE_DOWN, handle_select_start);
 
     addEventListener(Event.ENTER_FRAME, on_enter_frame);
-  }
-
-  function handle_nav_start(e:Event)
-  {
-    stage.addEventListener(MouseEvent.MOUSE_MOVE, handle_nav_move);
-    stage.addEventListener(MouseEvent.MOUSE_UP, handle_nav_stop);
-
-    nav_to(nav_pane.mouseX);
-  }
-
-  function handle_nav_stop(e:Event)
-  {
-    stage.removeEventListener(MouseEvent.MOUSE_MOVE, handle_nav_move);
-    stage.removeEventListener(MouseEvent.MOUSE_UP, handle_nav_stop);
-  }
-
-  function handle_nav_move(e:Event)
-  {
-    nav_to(nav_pane.mouseX);
-  }
-
-  function nav_to(x:Float)
-  {
-    trace("Nav to: "+x);
-    timing_pane.scrollRect.x = -x;
-
-    var r = new flash.geom.Rectangle();
-    r.copyFrom(timing_pane.scrollRect);
-    r.x = x*(layout.frame_width);
-    timing_pane.scrollRect = r;
-    memory_pane.scrollRect = r;
   }
 
   private var layout = {
@@ -261,47 +248,43 @@ class HXScoutClientGUI extends Sprite
     session:{
       width:200,
     },
-    PAD:2,
+    summary:{
+      width:300,
+    },
     frame_width:6,
     MSCALE:100
   }
 
-  public function resize(w:Float, h:Float)
+  public function resize(w:Float=0, h:Float=0)
   {
-    var p = layout.PAD;
-
-    var y = p;
-    draw_pane(w, h, nav_pane,     layout.session.width+2*p, y, w-(layout.session.width+p*3), layout.nav.height,    0, false);
-    y += p + layout.nav.height;
-    draw_pane(w, h, timing_pane,  layout.session.width+2*p, y, w-(layout.session.width+p*3), layout.timing.height, 0);
-    y += p + layout.timing.height;
-    draw_pane(w, h, memory_pane,  layout.session.width+2*p, y, w-(layout.session.width+p*3), layout.timing.height, 0);
-    draw_pane(w, h, session_pane, p,       p, (layout.session.width-p*2),   h-2*p,                0, false);
-
+    var y = 0;
+    resize_pane(w, h, session_pane, 0,       0, (layout.session.width),   h);
+    resize_pane(w, h, nav_pane,     layout.session.width, y, w-(layout.session.width), layout.nav.height);
+    y += layout.nav.height;
+    resize_pane(w, h, timing_pane,  layout.session.width, y, w-(layout.session.width+layout.summary.width), layout.timing.height);
+    resize_pane(w, h, summary_pane, w-layout.summary.width, y, layout.summary.width, layout.timing.height*2);
+    y += layout.timing.height;
+    resize_pane(w, h, memory_pane,  layout.session.width, y, w-(layout.session.width+layout.summary.width), layout.timing.height);
+    y += layout.timing.height;
+    resize_pane(w, h, detail_pane,  layout.session.width, y, w-(layout.session.width), h-y);
   }
 
-  inline function draw_pane(stage_w:Float, stage_h:Float, pane:Sprite, x:Float, y:Float, w:Float, h:Float, scroll:Float, bottom_aligned:Bool=true)
+  inline function resize_pane(stage_w:Float, stage_h:Float, pane:Sprite, x:Float, y:Float, w:Float, h:Float)
   {
+    pane.width = w;
+    pane.height = h;
     pane.x = -stage_w/2 + x;
     pane.y = -stage_h/2 + y;
-    if (bottom_aligned) {
-      pane.graphics.drawRect(0,-h,w,h);
-      pane.scrollRect = new flash.geom.Rectangle(0,-h,w,h);
-    } else {
-      pane.graphics.clear();
-      pane.graphics.lineStyle(1, 0x888888);
-      pane.graphics.beginFill(0x111111);
-      pane.graphics.drawRect(0,0,w,h);
-      pane.scrollRect = new flash.geom.Rectangle(0,0,w,h);
-    }
   }
 
   public function update_name(name:String, inst_id:String)
   {
     trace("Set name: "+inst_id+", "+name);
     var lbl = Util.make_label(name, 15);
-    var ses:Sprite = cast(session_pane.getChildAt(Std.parseInt(inst_id)));
+    lbl.filters = [new flash.filters.DropShadowFilter(1, 120, 0x0, 0.8, 3, 3, 1, 2)];
+    var ses:Sprite = cast(session_pane.cont.getChildAt(Std.parseInt(inst_id)));
     lbl.y = ses.height/2-lbl.height/2;
+    lbl.x = 4;
     ses.addChild(lbl);
   }
 
@@ -314,14 +297,19 @@ class HXScoutClientGUI extends Sprite
     }
 
     var s:Sprite = new Sprite();
-    s.graphics.beginFill(0x444444);
-    s.graphics.lineStyle(4, 0x555555);
-    s.graphics.drawRect(0,0,layout.session.width-2*layout.PAD,46);
+    var m:flash.geom.Matrix = new flash.geom.Matrix();
+    m.createGradientBox(session_pane.innerWidth,42,Math.PI/180*(-90));
+    s.graphics.beginGradientFill(openfl.display.GradientType.LINEAR,
+                                 [0x444444, 0x535353],
+                                 [1, 1],
+                                 [0,255],
+                                 m);
+    s.graphics.lineStyle(2, 0x555555);
+    s.graphics.drawRect(0,0,session_pane.innerWidth,42);
     s.buttonMode = true;
     AEL.add(s, MouseEvent.CLICK, function(e) { set_active_session(s.parent.getChildIndex(s)); });
-    //s.x = layout.PAD;
     s.y = (sessions.length-1)*46;
-    session_pane.addChild(s);
+    session_pane.cont.addChild(s);
   }
 
   public function set_active_session(n:Int)
@@ -329,8 +317,8 @@ class HXScoutClientGUI extends Sprite
     if (n>=sessions.length) return;
     active_session = n;
     last_frame_drawn = -1;
-    while (timing_pane.numChildren>0) timing_pane.removeChildAt(0);
-    while (memory_pane.numChildren>0) memory_pane.removeChildAt(0);
+    while (timing_pane.cont.numChildren>0) timing_pane.cont.removeChildAt(0);
+    while (memory_pane.cont.numChildren>0) memory_pane.cont.removeChildAt(0);
 
     var session:FLMSession = sessions[active_session];
     session.temp_mem = new StringMap<Int>();
@@ -342,8 +330,8 @@ class HXScoutClientGUI extends Sprite
   function reset_nav_pane()
   {
     // dispose?
-    while (nav_pane.numChildren>0) nav_pane.removeChildAt(0);
-    nav_pane.addChild(new Bitmap(new BitmapData(Std.int(nav_pane.width), Std.int(nav_pane.height), true, 0x0)));
+    while (nav_pane.cont.numChildren>0) nav_pane.cont.removeChildAt(0);
+    nav_pane.cont.addChild(new Bitmap(new BitmapData(Std.int(nav_pane.innerWidth), Std.int(nav_pane.innerHeight), true, 0x0)));
   }
 
   var mem_types = ["used","telemetry.overhead","managed.used","managed","total"];
@@ -386,30 +374,146 @@ class HXScoutClientGUI extends Sprite
       //s.graphics.drawRect(0,0,layout.frame_width-1,session.temp_mem.get("total")/500);
       //s.x = Std.parseInt(frame.id)*layout.frame_width;
       //s.y = -s.height;
-      //memory_pane.addChild(s);
+      //memory_pane.cont.addChild(s);
 
     }
     last_frame_drawn = session.frames.length-1;
   }
 
   private var stack_y:Float = 0;
-  private inline function add_rect(id:Int, pane:Sprite, value:Float, color:Int, stack:Bool) {
+  private inline function add_rect(id:Int, pane:Pane, value:Float, color:Int, stack:Bool) {
     if (!stack) stack_y = 0;
     var s:Shape = new Shape();
     s.graphics.beginFill(color);
     s.graphics.drawRect(0,0,layout.frame_width-1,value);
     s.x = id*layout.frame_width;
     s.y = -s.height-stack_y;
-    pane.addChild(s);
+    pane.cont.addChild(s);
     if (stack) stack_y += s.height;
 
     if (pane==timing_pane) {
       var m = new flash.geom.Matrix();
       m.translate(s.x, 0);
-      m.scale(1/layout.frame_width, -0.5);
-      m.translate(0, layout.nav.height);
-      cast(nav_pane.getChildAt(0)).bitmapData.draw(s, m);
+      var sc:Float = nav_pane.innerHeight/timing_pane.innerHeight;
+      m.scale(1/layout.frame_width, -sc);
+      m.translate(0, nav_pane.innerHeight);
+      cast(nav_pane.cont.getChildAt(0)).bitmapData.draw(s, m, null, openfl.display.BlendMode.ADD);
     }
   }
+}
 
+class NavController {
+  private var nav_pane:Pane;
+  private var timing_pane:Pane;
+  private var memory_pane:Pane;
+
+  public function new (nav, timing, memory):Void
+  {
+    nav_pane = nav;
+    timing_pane = timing;
+    memory_pane = memory;
+
+    AEL.add(nav_pane, MouseEvent.MOUSE_DOWN, handle_nav_start);
+  }
+
+  function handle_nav_start(e:Event)
+  {
+    nav_pane.stage.addEventListener(MouseEvent.MOUSE_MOVE, handle_nav_move);
+    nav_pane.stage.addEventListener(MouseEvent.MOUSE_UP, handle_nav_stop);
+
+    nav_to(nav_pane.mouseX);
+  }
+
+  function handle_nav_stop(e:Event)
+  {
+    nav_pane.stage.removeEventListener(MouseEvent.MOUSE_MOVE, handle_nav_move);
+    nav_pane.stage.removeEventListener(MouseEvent.MOUSE_UP, handle_nav_stop);
+  }
+
+  function handle_nav_move(e:Event)
+  {
+    nav_to(nav_pane.mouseX);
+  }
+
+  function nav_to(x:Float)
+  {
+    //trace("Nav to: "+x);
+    timing_pane.cont.scrollRect.x = -x;
+
+    var r = new flash.geom.Rectangle();
+    r.copyFrom(timing_pane.cont.scrollRect);
+    r.x = x*6; // layout.frame_width
+    timing_pane.cont.scrollRect = r;
+    memory_pane.cont.scrollRect = r;
+  }
+}
+
+class Pane extends Sprite {
+
+  public static inline var PAD:Float = 6;
+
+  public var cont(default, null):Sprite;
+  var decor:Shape;
+
+  var _width:Float;
+  var _height:Float;
+  var _bottom_aligned:Bool;
+
+  public function new (bottom_aligned:Bool=false, w:Float=0, h:Float=0)
+  {
+    super();
+    _bottom_aligned = bottom_aligned;
+    _width = w;
+    _height = h;
+
+    decor = new Shape();
+    super.addChild(decor);
+
+    cont = new Sprite();
+    super.addChild(cont);
+    cont.scrollRect = new flash.geom.Rectangle(0,_bottom_aligned?-h:h,w,h);
+    cont.x = cont.y = PAD;
+
+    redraw();
+  }
+
+  override public function set_width(w:Float):Float { _width = w; redraw(); return w; }
+  override public function get_width():Float { return _width; }
+  override public function set_height(h:Float):Float { _height = h; redraw(); return h; }
+  override public function get_height():Float { return _height; }
+
+  public var innerWidth(get, null):Float;
+  public var innerHeight(get, null):Float;
+  public function get_innerWidth():Float { return _width-2*PAD; }
+  public function get_innerHeight():Float { return _height-2*PAD; }
+
+  static var TEMP_M:flash.geom.Matrix = new flash.geom.Matrix();
+
+  private function redraw()
+  {
+    cont.scrollRect = new flash.geom.Rectangle(cont.scrollRect.x,
+                                               _bottom_aligned ? -(_height-2*PAD) : 0,
+                                               _width-2*PAD,
+                                               _height-2*PAD);
+
+    decor.graphics.clear();
+    decor.graphics.lineStyle(3, 0x111111);
+
+    TEMP_M.identity();
+    TEMP_M.createGradientBox(_width,_height,Math.PI/180*(-90));
+    decor.graphics.beginGradientFill(openfl.display.GradientType.LINEAR,
+                                     [0x444444, 0x535353],
+                                     [1, 1],
+                                     [0,255],
+                                     TEMP_M);
+
+    decor.graphics.drawRoundRect(0,0,_width,_height, 7);
+
+    // cont knockout
+    var p:Float = PAD/2;
+    decor.graphics.lineStyle(0,0, 0);
+    decor.graphics.beginFill(0x000000, 0.25);
+    decor.graphics.drawRoundRect(p,p,_width-p*2,_height-p*2,5);
+
+  }
 }

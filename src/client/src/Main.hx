@@ -163,6 +163,12 @@ class Main extends Sprite {
 
 }
 
+typedef SampleData = {
+  count:Int,
+  children:haxe.ds.IntMap<SampleData>
+}
+
+
 class FLMSession {
 
   public var frames:Array<Dynamic> = [];
@@ -188,13 +194,42 @@ class FLMSession {
           stack_strings.push(str);
         }
       }
-      //if (frame_data.samples!=null) {
+      if (frame_data.samples!=null) {
       //  trace(haxe.Json.stringify(frame_data.samples, null, "  "));
-      //}
+        var samples:Array<Dynamic> = frame_data.samples;        
+        frame_data.bottom_up = new haxe.ds.IntMap<SampleData>();
+        for (sample in samples) {
+          var numticks:Int = sample.numticks;
+          var callstack:Array<Int> = sample.callstack;
+          var ptr:haxe.ds.IntMap<SampleData> = frame_data.bottom_up;
+          var i:Int = callstack.length;
+          while ((--i)>=0) {
+            var idx = callstack[i];
+            if (!ptr.exists(idx)) {
+              var s:SampleData = { count:0,
+                                   children:new haxe.ds.IntMap<SampleData>() };
+              ptr.set(idx, s);
+            }
+            ptr.get(idx).count += numticks;
+            ptr = ptr.get(idx).children;
+          }
+        }
+        trace(frame_data.bottom_up);
+        print_samples(frame_data.bottom_up);
+      }
       frames.push(frame_data);
     }
   }
 
+  private static var INDENT:String = "                                            ";
+  private function print_samples(ptr:haxe.ds.IntMap<SampleData>, indent:Int=0):Void
+  {
+    var keys = ptr.keys();
+    for (i in keys) {
+      trace(INDENT.substr(0,indent)+stack_strings[i]+" - "+ptr.get(i).count);
+      print_samples(ptr.get(i).children, indent+1);
+    }
+  }
 }
 
 class HXScoutClientGUI extends Sprite

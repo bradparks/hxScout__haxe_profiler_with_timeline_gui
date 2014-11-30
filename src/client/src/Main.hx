@@ -326,7 +326,7 @@ class HXScoutClientGUI extends Sprite
     addChild(session_pane);
     addChild(detail_pane);
 
-    sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, detail_pane, layout, get_active_session);
+    sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, detail_pane, summary_pane, layout, get_active_session);
     nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane, sel_ctrl);
 
     addEventListener(Event.ENTER_FRAME, on_enter_frame);
@@ -364,6 +364,8 @@ class HXScoutClientGUI extends Sprite
     resize_pane(w, h, memory_pane,  layout.session.width, y, w-(layout.session.width+layout.summary.width), layout.timing.height);
     y += layout.timing.height;
     resize_pane(w, h, detail_pane,  layout.session.width, y, w-(layout.session.width), h-y);
+
+    if (stage!=null) sel_ctrl.redraw();
   }
 
   inline function resize_pane(stage_w:Float, stage_h:Float, pane:Sprite, x:Float, y:Float, w:Float, h:Float)
@@ -417,6 +419,8 @@ class HXScoutClientGUI extends Sprite
     while (timing_pane.cont.numChildren>0) timing_pane.cont.removeChildAt(0);
     while (memory_pane.cont.numChildren>0) memory_pane.cont.removeChildAt(0);
     while (detail_pane.cont.numChildren>0) detail_pane.cont.removeChildAt(0);
+    while (summary_pane.cont.numChildren>0) summary_pane.cont.removeChildAt(0);
+    detail_pane.cont.graphics.clear();
 
     var session:FLMSession = sessions[active_session];
     session.temp_running_mem = new StringMap<Int>();
@@ -549,19 +553,21 @@ class SelectionController {
   private var timing_pane:Pane;
   private var memory_pane:Pane;
   private var detail_pane:Pane;
+  private var summary_pane:Pane;
   private var layout:Dynamic;
   private var get_active_session:Void->FLMSession;
 
   private var selection:Shape;
   private var start_sel:Int;
 
-  public function new (nav_pane, timing_pane, memory_pane, detail_pane, layout,
+  public function new (nav_pane, timing_pane, memory_pane, detail_pane, summary_pane, layout,
                        get_active_session):Void
   {
     this.nav_pane = nav_pane;
     this.timing_pane = timing_pane;
     this.memory_pane = memory_pane;
     this.detail_pane = detail_pane;
+    this.summary_pane = summary_pane;
     this.layout = layout;
     this.get_active_session = get_active_session;
 
@@ -603,22 +609,44 @@ class SelectionController {
   public function redraw()
   {
     selection.graphics.clear();
-    selection.graphics.lineStyle(1, 0xffffff);
-    selection.graphics.beginFill(0xffffff, 0.25);
+    while (detail_pane.cont.numChildren>0) detail_pane.cont.removeChildAt(0);
+    while (summary_pane.cont.numChildren>0) summary_pane.cont.removeChildAt(0);
+    detail_pane.cont.graphics.clear();
+
+    var session:FLMSession = get_active_session();
+    if (session==null || start_sel<1) return;
+
+    var frame:Dynamic = session.frames[start_sel-1];
+    if (frame==null) return;
+
+    selection.graphics.lineStyle(1, 0xffffff, 0.5);
+    selection.graphics.beginFill(0xffffff, 0.15);
     selection.graphics.drawRect(start_sel*layout.frame_width - timing_pane.cont.scrollRect.x,
                                 -layout.timing.height+2,
                                 layout.frame_width,
                                 2*layout.timing.height-5);
 
     // Update summary, samples, etc
-    var session:FLMSession = get_active_session();
-    var frame:Dynamic = session.frames[start_sel-1];
-
     //trace(frame);
-    while (detail_pane.cont.numChildren>0) detail_pane.cont.removeChildAt(0);
-    if (session!=null && frame!=null && frame.top_down!=null) {
+
+    if (frame.duration!=null) {
+      var lbl = Util.make_label("Framerate:", 12, 0x777777, -1, "DroidSans-Bold.ttf");
+      lbl.y = 0;
+      lbl.x = 0;
+      summary_pane.cont.addChild(lbl);
+
+      var unit:Int = Math.floor(1000000/frame.duration.total);
+      var dec:Int = Math.floor(10000000/frame.duration.total)-10*unit;
+      var fps = Util.make_label((unit+"."+dec+" fps"), 18, 0xeeeeee);
+      fps.y = lbl.height;
+      fps.x = 0;
+      summary_pane.cont.addChild(fps);
+    }
+
+    if (frame.top_down!=null) {
       var total = frame.duration.as/1000;
       var y:Float = 0;
+      var ping = true;
       function display_samples(ptr:SampleData, indent:Int=0):Void
       {
         var keys = ptr.children.keys();
@@ -629,6 +657,12 @@ class SelectionController {
           lbl.y = y;
           lbl.x = indent*15;
           detail_pane.cont.addChild(lbl);
+
+          ping = !ping;
+          if (ping) {
+            detail_pane.cont.graphics.beginFill(0xffffff, 0.02);
+            detail_pane.cont.graphics.drawRect(0,y,detail_pane.innerWidth,lbl.height);
+          }
 
           // I'd use round, but Scout seems to use floor
           var pct = Math.max(0, Math.min(100, Math.floor(100*sample.total_time/total)))+"%";
@@ -643,7 +677,7 @@ class SelectionController {
           lbl.y = y;
           lbl.x = x - lbl.width;
           detail_pane.cont.addChild(lbl);
-          x -= 100;
+          x -= 80;
 
           // I'd use round, but Scout seems to use floor
           var pct = Math.max(0, Math.min(100, Math.floor(100*sample.self_time/total)))+"%";

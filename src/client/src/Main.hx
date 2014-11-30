@@ -164,7 +164,8 @@ class Main extends Sprite {
 }
 
 typedef SampleData = {
-  count:Int,
+  total_time:Int,
+  self_time:Int,
   children:haxe.ds.IntMap<SampleData>
 }
 
@@ -173,7 +174,7 @@ class FLMSession {
 
   public var frames:Array<Dynamic> = [];
   public var inst_id:String;
-  public var temp_mem:StringMap<Int>;
+  public var temp_running_mem:StringMap<Int>;
   public var name:String;
   public var stack_strings:Array<String> = ["1-indexed"];
 
@@ -187,47 +188,100 @@ class FLMSession {
   {
     if (frame_data.session_name!=null) {
       name = frame_data.session_name;
-    } else {
-      if (frame_data.push_stack_strings!=null) {
-        var strings:Array<String> = frame_data.push_stack_strings;
-        for (str in strings) {
-          stack_strings.push(str);
-        }
-      }
-      if (frame_data.samples!=null) {
-      //  trace(haxe.Json.stringify(frame_data.samples, null, "  "));
-        var samples:Array<Dynamic> = frame_data.samples;        
-        frame_data.bottom_up = new haxe.ds.IntMap<SampleData>();
-        for (sample in samples) {
-          var numticks:Int = sample.numticks;
-          var callstack:Array<Int> = sample.callstack;
-          var ptr:haxe.ds.IntMap<SampleData> = frame_data.bottom_up;
-          var i:Int = callstack.length;
-          while ((--i)>=0) {
-            var idx = callstack[i];
-            if (!ptr.exists(idx)) {
-              var s:SampleData = { count:0,
-                                   children:new haxe.ds.IntMap<SampleData>() };
-              ptr.set(idx, s);
-            }
-            ptr.get(idx).count += numticks;
-            ptr = ptr.get(idx).children;
-          }
-        }
-        trace(frame_data.bottom_up);
-        print_samples(frame_data.bottom_up);
-      }
-      frames.push(frame_data);
+      return; // Not really frame data...
     }
+
+    if (frame_data.push_stack_strings!=null) {
+      var strings:Array<String> = frame_data.push_stack_strings;
+      for (str in strings) {
+        stack_strings.push(str);
+      }
+    }
+    if (frame_data.samples!=null) {
+      collate_sample_data(frame_data);
+    }
+    frames.push(frame_data);
   }
 
-  private static var INDENT:String = "                                            ";
-  private function print_samples(ptr:haxe.ds.IntMap<SampleData>, indent:Int=0):Void
+  private function collate_sample_data(frame_data:Dynamic):Void
   {
-    var keys = ptr.keys();
+    //trace(haxe.Json.stringify(frame_data.samples, null, "  "));
+    var samples:Array<Dynamic> = frame_data.samples;        
+
+    var top_down:SampleData = {
+      total_time:0,
+      self_time:0,
+      children:new haxe.ds.IntMap<SampleData>()
+    }
+    frame_data.top_down = top_down;
+    for (sample in samples) {
+      var numticks:Int = sample.numticks;
+      var callstack:Array<Int> = sample.callstack;
+      var ptr:SampleData = top_down;
+      var i:Int = callstack.length;
+      while ((--i)>=0) {
+        var idx = callstack[i];
+        if (!ptr.children.exists(idx)) {
+          var s:SampleData = { total_time:0,
+                               self_time:0,
+                               children:new haxe.ds.IntMap<SampleData>() };
+          ptr.children.set(idx, s);
+        }
+        ptr.children.get(idx).total_time += numticks;
+        ptr = ptr.children.get(idx);
+      }
+    }
+
+    calc_self_time(frame_data.top_down);
+
+    //trace("Top Down, frame "+(frames.length+1));
+    //print_samples(frame_data.top_down);
+
+    var bottom_up:SampleData = {
+      total_time:0,
+      self_time:0,
+      children:new haxe.ds.IntMap<SampleData>()
+    }
+    frame_data.bottom_up = bottom_up;
+    for (sample in samples) {
+      var numticks:Int = sample.numticks;
+      var callstack:Array<Int> = sample.callstack;
+      var ptr:SampleData = bottom_up;
+      var i:Int = -1;
+      while ((++i)<callstack.length) {
+        var idx = callstack[i];
+        if (!ptr.children.exists(idx)) {
+          var s:SampleData = { total_time:0,
+                               self_time:0,
+                               children:new haxe.ds.IntMap<SampleData>() };
+          ptr.children.set(idx, s);
+        }
+        ptr.children.get(idx).self_time += numticks;
+        ptr = ptr.children.get(idx);
+      }
+    }
+
+    //trace("Bottom Up, frame "+(frames.length+1));
+    //print_samples(frame_data.bottom_up);
+  }
+
+  //private static var INDENT:String = "                                            ";
+  //private function print_samples(ptr:SampleData, indent:Int=0):Void
+  //{
+  //  var keys = ptr.children.keys();
+  //  for (i in keys) {
+  //    trace(INDENT.substr(0,indent)+stack_strings[i]+" - "+ptr.children.get(i).self_time+", "+ptr.children.get(i).total_time);
+  //    print_samples(ptr.children.get(i), indent+1);
+  //  }
+  //}
+
+  private function calc_self_time(ptr:SampleData):Void
+  {
+    ptr.self_time = ptr.total_time;
+    var keys = ptr.children.keys();
     for (i in keys) {
-      trace(INDENT.substr(0,indent)+stack_strings[i]+" - "+ptr.get(i).count);
-      print_samples(ptr.get(i).children, indent+1);
+      ptr.self_time -= ptr.children.get(i).total_time;
+      calc_self_time(ptr.children.get(i));
     }
   }
 }
@@ -356,7 +410,7 @@ class HXScoutClientGUI extends Sprite
     while (memory_pane.cont.numChildren>0) memory_pane.cont.removeChildAt(0);
 
     var session:FLMSession = sessions[active_session];
-    session.temp_mem = new StringMap<Int>();
+    session.temp_running_mem = new StringMap<Int>();
 
     reset_nav_pane();
     resize(stage.stageWidth, stage.stageHeight);
@@ -369,7 +423,7 @@ class HXScoutClientGUI extends Sprite
     nav_pane.cont.addChild(new Bitmap(new BitmapData(Std.int(nav_pane.innerWidth), Std.int(nav_pane.innerHeight), true, 0x0)));
   }
 
-  var mem_types = ["used","telemetry.overhead","managed.used","managed","total"];
+  var mem_types = ["used","telemetry.overhead","managed.used","managed","total","bitmap"];
 
   private function on_enter_frame(e:Event)
   {
@@ -380,9 +434,10 @@ class HXScoutClientGUI extends Sprite
       var frame = session.frames[i];
 
       if (Reflect.hasField(frame, "mem")) {
+        //trace(frame.mem); // mem debug
         for (key in mem_types) {
           if (Reflect.hasField(frame.mem, key)) {
-            session.temp_mem.set(key, Reflect.field(frame.mem, key));
+            session.temp_running_mem.set(key, Reflect.field(frame.mem, key));
           }
         }
       }
@@ -396,21 +451,14 @@ class HXScoutClientGUI extends Sprite
       add_rect(i, timing_pane, frame.duration.as/layout.timing.scale, 0x2288cc, true);
       add_rect(i, timing_pane, frame.duration.rend/layout.timing.scale, 0x66aa66, true);
 
-      if (!session.temp_mem.exists("total")) continue;
+      if (!session.temp_running_mem.exists("total")) continue;
 
-      //trace(session.temp_mem);
+      // trace(session.temp_running_mem); // mem debug
 
-      add_rect(i, memory_pane, session.temp_mem.get("total")/layout.MSCALE, 0x444444, false);
-      add_rect(i, memory_pane, session.temp_mem.get("managed.used")/layout.MSCALE, 0x227788, true);
-      add_rect(i, memory_pane, session.temp_mem.get("bitmap.display")/layout.MSCALE, 0x22aa99, true);
-
-      //var s:Shape = new Shape();
-      //s.graphics.beginFill(0x444444);
-      //s.graphics.drawRect(0,0,layout.frame_width-1,session.temp_mem.get("total")/500);
-      //s.x = Std.parseInt(frame.id)*layout.frame_width;
-      //s.y = -s.height;
-      //memory_pane.cont.addChild(s);
-
+      add_rect(i, memory_pane, session.temp_running_mem.get("total")/layout.MSCALE, 0x444444, false);             // Current Total Memory
+      add_rect(i, memory_pane, session.temp_running_mem.get("telemetry.overhead")/layout.MSCALE, 0x667755, true); // In other?
+      add_rect(i, memory_pane, session.temp_running_mem.get("bitmap")/layout.MSCALE, 0x22aa99, true);             // TODO: category
+      add_rect(i, memory_pane, session.temp_running_mem.get("managed.used")/layout.MSCALE, 0x227788, true);       // ActionScript Objects
     }
     last_frame_drawn = session.frames.length-1;
   }

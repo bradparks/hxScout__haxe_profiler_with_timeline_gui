@@ -10,16 +10,17 @@ import openfl.Assets;
 import motion.Actuate;
 
 class Util {
-  private static var font;
+  private static var fonts:StringMap<Font> = new StringMap<Font>();
 
   public static function make_label(text:String,
                                     size:Int=11,
                                     color:Int=0xaaaaaa,
-                                    width:Int=-1)
+                                    width:Int=-1,
+                                    font_file:String="DroidSans.ttf")
   {
-    if (font==null) font = Assets.getFont("assets/DroidSans.ttf");
+    if (!fonts.exists(font_file)) fonts.set(font_file, Assets.getFont("assets/"+font_file));
 
-    var format = new TextFormat(font.fontName, size, color);
+    var format = new TextFormat(fonts.get(font_file).fontName, size, color);
     var textField = new TextField();
 
     textField.defaultTextFormat = format;
@@ -110,6 +111,11 @@ class Util {
         callbacks.push(f);
       }
     };
+  }
+
+  public static function remove_children(d:DisplayObjectContainer):Void
+  {
+    while (d.numChildren>0) d.removeChildAt(0);
   }
 
   public static function shake(d:DisplayObject)

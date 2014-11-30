@@ -164,6 +164,7 @@ class Main extends Sprite {
 }
 
 typedef SampleData = {
+  collapsed:Bool,
   total_time:Int,
   self_time:Int,
   children:haxe.ds.IntMap<SampleData>
@@ -206,9 +207,10 @@ class FLMSession {
   private function collate_sample_data(frame_data:Dynamic):Void
   {
     //trace(haxe.Json.stringify(frame_data.samples, null, "  "));
-    var samples:Array<Dynamic> = frame_data.samples;        
+    var samples:Array<Dynamic> = frame_data.samples;
 
     var top_down:SampleData = {
+      collapsed:false,
       total_time:0,
       self_time:0,
       children:new haxe.ds.IntMap<SampleData>()
@@ -222,7 +224,8 @@ class FLMSession {
       while ((--i)>=0) {
         var idx = callstack[i];
         if (!ptr.children.exists(idx)) {
-          var s:SampleData = { total_time:0,
+          var s:SampleData = { collapsed:false,
+                               total_time:0,
                                self_time:0,
                                children:new haxe.ds.IntMap<SampleData>() };
           ptr.children.set(idx, s);
@@ -238,6 +241,7 @@ class FLMSession {
     //print_samples(frame_data.top_down);
 
     var bottom_up:SampleData = {
+      collapsed:false,
       total_time:0,
       self_time:0,
       children:new haxe.ds.IntMap<SampleData>()
@@ -251,7 +255,8 @@ class FLMSession {
       while ((++i)<callstack.length) {
         var idx = callstack[i];
         if (!ptr.children.exists(idx)) {
-          var s:SampleData = { total_time:0,
+          var s:SampleData = { collapsed:false,
+                               total_time:0,
                                self_time:0,
                                children:new haxe.ds.IntMap<SampleData>() };
           ptr.children.set(idx, s);
@@ -301,6 +306,7 @@ class HXScoutClientGUI extends Sprite
   private var last_frame_drawn = -1;
 
   private var nav_ctrl:NavController;
+  private var sel_ctrl:SelectionController;
 
   public function new()
   {
@@ -320,11 +326,13 @@ class HXScoutClientGUI extends Sprite
     addChild(session_pane);
     addChild(detail_pane);
 
-    nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane);
-    //AEL.add(timing_pane, MouseEvent.MOUSE_DOWN, handle_select_start);
+    sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, detail_pane, layout, get_active_session);
+    nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane, sel_ctrl);
 
     addEventListener(Event.ENTER_FRAME, on_enter_frame);
   }
+
+  private function get_active_session():FLMSession { return active_session<0 ? null : sessions[active_session]; }
 
   private var layout = {
     nav:{
@@ -408,6 +416,7 @@ class HXScoutClientGUI extends Sprite
     last_frame_drawn = -1;
     while (timing_pane.cont.numChildren>0) timing_pane.cont.removeChildAt(0);
     while (memory_pane.cont.numChildren>0) memory_pane.cont.removeChildAt(0);
+    while (detail_pane.cont.numChildren>0) detail_pane.cont.removeChildAt(0);
 
     var session:FLMSession = sessions[active_session];
     session.temp_running_mem = new StringMap<Int>();
@@ -489,12 +498,14 @@ class NavController {
   private var nav_pane:Pane;
   private var timing_pane:Pane;
   private var memory_pane:Pane;
+  private var sel_ctrl:SelectionController;
 
-  public function new (nav, timing, memory):Void
+  public function new (nav_pane, timing_pane, memory_pane, sel_ctrl):Void
   {
-    nav_pane = nav;
-    timing_pane = timing;
-    memory_pane = memory;
+    this.nav_pane = nav_pane;
+    this.timing_pane = timing_pane;
+    this.memory_pane = memory_pane;
+    this.sel_ctrl = sel_ctrl;
 
     AEL.add(nav_pane, MouseEvent.MOUSE_DOWN, handle_nav_start);
   }
@@ -528,6 +539,133 @@ class NavController {
     r.x = x*6; // layout.frame_width
     timing_pane.cont.scrollRect = r;
     memory_pane.cont.scrollRect = r;
+
+    sel_ctrl.redraw();
+  }
+}
+
+class SelectionController {
+  private var nav_pane:Pane;
+  private var timing_pane:Pane;
+  private var memory_pane:Pane;
+  private var detail_pane:Pane;
+  private var layout:Dynamic;
+  private var get_active_session:Void->FLMSession;
+
+  private var selection:Shape;
+  private var start_sel:Int;
+
+  public function new (nav_pane, timing_pane, memory_pane, detail_pane, layout,
+                       get_active_session):Void
+  {
+    this.nav_pane = nav_pane;
+    this.timing_pane = timing_pane;
+    this.memory_pane = memory_pane;
+    this.detail_pane = detail_pane;
+    this.layout = layout;
+    this.get_active_session = get_active_session;
+
+    AEL.add(timing_pane, MouseEvent.MOUSE_DOWN, handle_select_start);
+    AEL.add(memory_pane, MouseEvent.MOUSE_DOWN, handle_select_start);
+
+    selection = new Shape();
+    memory_pane.addChild(selection);
+  }
+
+  function handle_select_start(e:Event)
+  {
+    selection.stage.addEventListener(MouseEvent.MOUSE_MOVE, handle_select_move);
+    selection.stage.addEventListener(MouseEvent.MOUSE_UP, handle_select_stop);
+
+    select_at(timing_pane.cont.mouseX);
+  }
+
+  function handle_select_stop(e:Event)
+  {
+    selection.stage.removeEventListener(MouseEvent.MOUSE_MOVE, handle_select_move);
+    selection.stage.removeEventListener(MouseEvent.MOUSE_UP, handle_select_stop);
+  }
+
+  function handle_select_move(e:Event)
+  {
+    select_at(timing_pane.cont.mouseX, false);
+  }
+
+  function select_at(x:Float, start_selection:Bool=true)
+  {
+    var num:Int = 1+Math.floor((x-2)/layout.frame_width);
+    //trace("Select at: "+x+" num="+num);
+    start_sel = num;
+
+    redraw();
+  }
+
+  public function redraw()
+  {
+    selection.graphics.clear();
+    selection.graphics.lineStyle(1, 0xffffff);
+    selection.graphics.beginFill(0xffffff, 0.25);
+    selection.graphics.drawRect(start_sel*layout.frame_width - timing_pane.cont.scrollRect.x,
+                                -layout.timing.height+2,
+                                layout.frame_width,
+                                2*layout.timing.height-5);
+
+    // Update summary, samples, etc
+    var session:FLMSession = get_active_session();
+    var frame:Dynamic = session.frames[start_sel-1];
+
+    //trace(frame);
+    while (detail_pane.cont.numChildren>0) detail_pane.cont.removeChildAt(0);
+    if (session!=null && frame!=null && frame.top_down!=null) {
+      var total = frame.duration.as/1000;
+      var y:Float = 0;
+      function display_samples(ptr:SampleData, indent:Int=0):Void
+      {
+        var keys = ptr.children.keys();
+        for (i in keys) {
+          var sample = ptr.children.get(i);
+
+          var lbl = Util.make_label(session.stack_strings[i], 12, 0x66aadd);
+          lbl.y = y;
+          lbl.x = indent*15;
+          detail_pane.cont.addChild(lbl);
+
+          // I'd use round, but Scout seems to use floor
+          var pct = Math.max(0, Math.min(100, Math.floor(100*sample.total_time/total)))+"%";
+          var x:Float = detail_pane.innerWidth - 20;
+          lbl = Util.make_label(pct, 12, 0xeeeeee);
+          lbl.y = y;
+          lbl.x = x - lbl.width;
+          detail_pane.cont.addChild(lbl);
+          x -= 60;
+
+          lbl = Util.make_label(cast(sample.total_time), 12, 0xeeeeee);
+          lbl.y = y;
+          lbl.x = x - lbl.width;
+          detail_pane.cont.addChild(lbl);
+          x -= 100;
+
+          // I'd use round, but Scout seems to use floor
+          var pct = Math.max(0, Math.min(100, Math.floor(100*sample.self_time/total)))+"%";
+          lbl = Util.make_label(pct, 12, 0xeeeeee);
+          lbl.y = y;
+          lbl.x = x - lbl.width;
+          detail_pane.cont.addChild(lbl);
+          x -= 60;
+
+          lbl = Util.make_label(cast(sample.self_time), 12, 0xeeeeee);
+          lbl.y = y;
+          lbl.x = x - lbl.width;
+          detail_pane.cont.addChild(lbl);
+
+          y += lbl.height;
+          display_samples(sample, indent+1);
+        }
+      }
+      display_samples(frame.top_down);
+    }
+
+
   }
 }
 
@@ -550,10 +688,10 @@ class Pane extends Sprite {
     _height = h;
 
     decor = new Shape();
-    super.addChild(decor);
+    addChild(decor);
 
     cont = new Sprite();
-    super.addChild(cont);
+    addChild(cont);
     cont.scrollRect = new flash.geom.Rectangle(0,_bottom_aligned?-h:h,w,h);
     cont.x = cont.y = PAD;
 

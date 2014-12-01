@@ -727,13 +727,14 @@ class SelectionController {
 
   public static function time_format(usec):String
   {
+    var sec:Float = usec/1000000;
     var rtn = "";
-    var min = Math.floor(usec/60000000);
+    var min = Math.floor(sec/60);
     rtn += min+":";
-    var sec = Math.floor(usec/1000000)-min*60000;
+    sec = sec%60;
     if (sec<10) rtn += "0";
-    rtn += sec+".";
-    var dec = Math.floor(usec/1000)-min*60000-sec*1000000;
+    rtn += Math.floor(sec)+".";
+    var dec = Math.floor((sec%1)*1000);
     if (dec<1) rtn += "000";
     else if (dec<10) rtn += "00";
     else if (dec<100) rtn += "0";

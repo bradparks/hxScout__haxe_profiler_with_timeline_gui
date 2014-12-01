@@ -629,8 +629,9 @@ class SelectionController {
     // Update summary, samples, etc
     //trace(frame);
 
+    // - - Summary pane - -
     if (frame.duration!=null) {
-      var lbl = Util.make_label("Framerate:", 12, 0x777777, -1, "DroidSans-Bold.ttf");
+      var lbl = Util.make_label("Framerate", 12, 0x777777, -1, "DroidSans-Bold.ttf");
       lbl.y = 0;
       lbl.x = 0;
       summary_pane.cont.addChild(lbl);
@@ -641,8 +642,32 @@ class SelectionController {
       fps.y = lbl.height;
       fps.x = 0;
       summary_pane.cont.addChild(fps);
+
+      var flbl = Util.make_label("Frame", 12, 0x777777, -1, "DroidSans-Bold.ttf");
+      flbl.y = 0;
+      flbl.x = lbl.x + lbl.width*1.4;
+      summary_pane.cont.addChild(flbl);
+
+      var ftxt = Util.make_label(start_sel+"", 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
+      ftxt.y = 0;
+      ftxt.x = flbl.x + flbl.width*1.15;
+      summary_pane.cont.addChild(ftxt);
+
+      var tlbl = Util.make_label("Time", 12, 0x777777, -1, "DroidSans-Bold.ttf");
+      tlbl.y = fps.y + fps.height - tlbl.height;
+      tlbl.x = lbl.x + lbl.width*1.4;
+      summary_pane.cont.addChild(tlbl);
+
+      var t = time_format(frame.offset)+" - "+time_format(frame.offset+frame.duration.total);
+
+      var ttxt = Util.make_label(t, 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
+      ttxt.y = tlbl.y;
+      ttxt.x = ftxt.x;
+      summary_pane.cont.addChild(ttxt);
+
     }
 
+    // - - Detail / Samples pane - -
     if (frame.top_down!=null) {
       var total = frame.duration.as/1000;
       var y:Float = 0;
@@ -698,8 +723,22 @@ class SelectionController {
       }
       display_samples(frame.top_down);
     }
+  }
 
-
+  public static function time_format(usec):String
+  {
+    var rtn = "";
+    var min = Math.floor(usec/60000000);
+    rtn += min+":";
+    var sec = Math.floor(usec/1000000)-min*60000;
+    if (sec<10) rtn += "0";
+    rtn += sec+".";
+    var dec = Math.floor(usec/1000)-min*60000-sec*1000000;
+    if (dec<1) rtn += "000";
+    else if (dec<10) rtn += "00";
+    else if (dec<100) rtn += "0";
+    rtn += dec;
+    return rtn;
   }
 }
 

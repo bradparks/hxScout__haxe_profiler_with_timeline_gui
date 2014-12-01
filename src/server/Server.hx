@@ -133,7 +133,7 @@ class FLMListener {
       var data:Map<String, Dynamic> = null;
       try {
         data = r.read();
-      } catch( e:Dynamic )	{
+      } catch( e:Dynamic) {
         // Handle EOF gracefully
         if (Type.getClass(e)==haxe.io.Eof) {
           trace("FLMReader["+inst_id+"] closing...");
@@ -269,11 +269,12 @@ class FLMListener {
           if (first_enter) {
             first_enter = false;
           } else {
+            var offset = cur_frame.offset + cur_frame.duration.total;
             cur_frame.timing = null; // release timing events
             //Sys.stdout().writeString(cur_frame.to_json()+",\n");
             client_writer.sendMessage(cur_frame.to_json());
             frames.push(cur_frame);
-            cur_frame = new Frame(cur_frame.id+1, inst_id);
+            cur_frame = new Frame(cur_frame.id+1, inst_id, offset);
           }
         }
       }
@@ -284,6 +285,7 @@ class FLMListener {
 class Frame {
   public var inst_id:Int;
   public var id:Int;
+  public var offset:Int;
   public var duration:Dynamic;
   public var mem:Map<String, Int>;
   public var samples:Array<Dynamic>;
@@ -294,9 +296,10 @@ class Frame {
 #end
   public var timing:Timing;
 
-  public function new(frame_id:Int, instance_id:Int) {
+  public function new(frame_id:Int, instance_id:Int, offset:Int=0) {
     inst_id = instance_id;
     id = frame_id;
+    this.offset = offset;
     duration = {};
     duration.total = 0;
     duration.as = 0;
@@ -318,6 +321,7 @@ class Frame {
     return haxe.Json.stringify({
       id:id,
       inst_id:inst_id,
+      offset:offset,
 #if DEBUG_UNKNOWN
       unknown_names:unknown_names,
 #end

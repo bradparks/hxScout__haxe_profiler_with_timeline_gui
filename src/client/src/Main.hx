@@ -163,11 +163,40 @@ class Main extends Sprite {
 
 }
 
-typedef SampleData = {
-  collapsed:Bool,
-  total_time:Int,
-  self_time:Int,
-  children:haxe.ds.IntMap<SampleData>
+class SampleData {
+  public var collapsed:Bool = false;
+  public var total_time:Int = 0;
+  public var self_time:Int = 0;
+  public var children:haxe.ds.IntMap<SampleData> = new haxe.ds.IntMap<SampleData>();
+
+  public function ensure_child(idx):Void
+  {
+    if (!children.exists(idx)) {
+      var s = new SampleData();
+      children.set(idx, s);
+    }
+  }
+
+  public static function merge_sample_data(tgt:SampleData, source:SampleData, root:Bool=true):Void
+  {
+    tgt.total_time += source.total_time;
+    var keys = source.children.keys();
+    for (i in keys) {
+      tgt.ensure_child(i);
+      merge_sample_data(tgt.children.get(i), source.children.get(i), false);
+    }
+    if (root) tgt.calc_self_time();
+  }
+
+  public function calc_self_time():Void
+  {
+    self_time = total_time;
+    var keys = children.keys();
+    for (i in keys) {
+      self_time -= children.get(i).total_time;
+      children.get(i).calc_self_time();
+    }
+  }
 }
 
 
@@ -209,12 +238,7 @@ class FLMSession {
     //trace(haxe.Json.stringify(frame_data.samples, null, "  "));
     var samples:Array<Dynamic> = frame_data.samples;
 
-    var top_down:SampleData = {
-      collapsed:false,
-      total_time:0,
-      self_time:0,
-      children:new haxe.ds.IntMap<SampleData>()
-    }
+    var top_down = new SampleData();
     frame_data.top_down = top_down;
     for (sample in samples) {
       var numticks:Int = sample.numticks;
@@ -223,29 +247,17 @@ class FLMSession {
       var i:Int = callstack.length;
       while ((--i)>=0) {
         var idx = callstack[i];
-        if (!ptr.children.exists(idx)) {
-          var s:SampleData = { collapsed:false,
-                               total_time:0,
-                               self_time:0,
-                               children:new haxe.ds.IntMap<SampleData>() };
-          ptr.children.set(idx, s);
-        }
+        ptr.ensure_child(idx);
         ptr.children.get(idx).total_time += numticks;
         ptr = ptr.children.get(idx);
       }
     }
-
-    calc_self_time(frame_data.top_down);
+    top_down.calc_self_time();
 
     //trace("Top Down, frame "+(frames.length+1));
     //print_samples(frame_data.top_down);
 
-    var bottom_up:SampleData = {
-      collapsed:false,
-      total_time:0,
-      self_time:0,
-      children:new haxe.ds.IntMap<SampleData>()
-    }
+    var bottom_up = new SampleData();
     frame_data.bottom_up = bottom_up;
     for (sample in samples) {
       var numticks:Int = sample.numticks;
@@ -254,13 +266,7 @@ class FLMSession {
       var i:Int = -1;
       while ((++i)<callstack.length) {
         var idx = callstack[i];
-        if (!ptr.children.exists(idx)) {
-          var s:SampleData = { collapsed:false,
-                               total_time:0,
-                               self_time:0,
-                               children:new haxe.ds.IntMap<SampleData>() };
-          ptr.children.set(idx, s);
-        }
+        ptr.ensure_child(idx);
         ptr.children.get(idx).self_time += numticks;
         ptr = ptr.children.get(idx);
       }
@@ -280,15 +286,6 @@ class FLMSession {
   //  }
   //}
 
-  private function calc_self_time(ptr:SampleData):Void
-  {
-    ptr.self_time = ptr.total_time;
-    var keys = ptr.children.keys();
-    for (i in keys) {
-      ptr.self_time -= ptr.children.get(i).total_time;
-      calc_self_time(ptr.children.get(i));
-    }
-  }
 }
 
 class HXScoutClientGUI extends Sprite
@@ -416,6 +413,7 @@ class HXScoutClientGUI extends Sprite
     if (n>=sessions.length) return;
     active_session = n;
     last_frame_drawn = -1;
+    sel_ctrl.start_sel = sel_ctrl.end_sel = -1;
     while (timing_pane.cont.numChildren>0) timing_pane.cont.removeChildAt(0);
     while (memory_pane.cont.numChildren>0) memory_pane.cont.removeChildAt(0);
     while (detail_pane.cont.numChildren>0) detail_pane.cont.removeChildAt(0);
@@ -558,7 +556,8 @@ class SelectionController {
   private var get_active_session:Void->FLMSession;
 
   private var selection:Shape;
-  private var start_sel:Int;
+  public var start_sel:Int;
+  public var end_sel:Int;
 
   public function new (nav_pane, timing_pane, memory_pane, detail_pane, summary_pane, layout,
                        get_active_session):Void
@@ -583,7 +582,7 @@ class SelectionController {
     selection.stage.addEventListener(MouseEvent.MOUSE_MOVE, handle_select_move);
     selection.stage.addEventListener(MouseEvent.MOUSE_UP, handle_select_stop);
 
-    select_at(timing_pane.cont.mouseX);
+    select_at(timing_pane.cont.mouseX, !cast(e).shiftKey);
   }
 
   function handle_select_stop(e:Event)
@@ -601,7 +600,8 @@ class SelectionController {
   {
     var num:Int = 1+Math.floor((x-2)/layout.frame_width);
     //trace("Select at: "+x+" num="+num);
-    start_sel = num;
+    if (start_selection) start_sel = num;
+    end_sel = num;
 
     redraw();
   }
@@ -614,20 +614,34 @@ class SelectionController {
     detail_pane.cont.graphics.clear();
 
     var session:FLMSession = get_active_session();
-    if (session==null || start_sel<1) return;
+    if (session==null) return;
 
-    var frame:Dynamic = session.frames[start_sel-1];
-    if (frame==null) return;
+    var start = Std.int(Math.min(start_sel, end_sel));
+    var end = Std.int(Math.max(start_sel, end_sel));
+
+    if (start<1) start=1;
+    if (end>session.frames.length) end = session.frames.length;
+
+    var frame:Dynamic = session.frames[start-1];
+    var end_frame:Dynamic = session.frames[end-1];
+    if (frame==null || end_frame==null) return;
+
+    var num_frames:Int = end-start+1;
 
     selection.graphics.lineStyle(1, 0xffffff, 0.5);
     selection.graphics.beginFill(0xffffff, 0.15);
-    selection.graphics.drawRect(start_sel*layout.frame_width - timing_pane.cont.scrollRect.x,
+    selection.graphics.drawRect(start*layout.frame_width - timing_pane.cont.scrollRect.x,
                                 -layout.timing.height+2,
-                                layout.frame_width,
+                                layout.frame_width*num_frames,
                                 2*layout.timing.height-5);
 
     // Update summary, samples, etc
     //trace(frame);
+
+    inline function each_frame(f:Dynamic->Void):Void {
+      var idx;
+      for (idx in start...end+1) f(session.frames[idx-1]);
+    }
 
     // - - Summary pane - -
     if (frame.duration!=null) {
@@ -636,19 +650,22 @@ class SelectionController {
       lbl.x = 0;
       summary_pane.cont.addChild(lbl);
 
-      var unit:Int = Math.floor(1000000/frame.duration.total);
-      var dec:Int = Math.floor(10000000/frame.duration.total)-10*unit;
+      var total = 0;
+      each_frame(function(f) { total += f.duration.total; });
+
+      var unit:Int = Math.floor(num_frames*1000000/total);
+      var dec:Int = Math.floor(num_frames*10000000/total)-10*unit;
       var fps = Util.make_label((unit+"."+dec+" fps"), 18, 0xeeeeee);
       fps.y = lbl.height;
       fps.x = 0;
       summary_pane.cont.addChild(fps);
 
-      var flbl = Util.make_label("Frame", 12, 0x777777, -1, "DroidSans-Bold.ttf");
+      var flbl = Util.make_label("Frame"+(start==end?"":"s"), 12, 0x777777, -1, "DroidSans-Bold.ttf");
       flbl.y = 0;
       flbl.x = lbl.x + lbl.width*1.4;
       summary_pane.cont.addChild(flbl);
 
-      var ftxt = Util.make_label(start_sel+"", 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
+      var ftxt = Util.make_label(start+(start==end?"":" - "+end), 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
       ftxt.y = 0;
       ftxt.x = flbl.x + flbl.width*1.15;
       summary_pane.cont.addChild(ftxt);
@@ -658,7 +675,7 @@ class SelectionController {
       tlbl.x = lbl.x + lbl.width*1.4;
       summary_pane.cont.addChild(tlbl);
 
-      var t = time_format(frame.offset)+" - "+time_format(frame.offset+frame.duration.total);
+      var t = time_format(frame.offset)+" - "+time_format(end_frame.offset+end_frame.duration.total);
 
       var ttxt = Util.make_label(t, 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
       ttxt.y = tlbl.y;
@@ -668,61 +685,67 @@ class SelectionController {
     }
 
     // - - Detail / Samples pane - -
-    if (frame.top_down!=null) {
-      var total = frame.duration.as/1000;
-      var y:Float = 0;
-      var ping = true;
-      function display_samples(ptr:SampleData, indent:Int=0):Void
-      {
-        var keys = ptr.children.keys();
-        for (i in keys) {
-          var sample = ptr.children.get(i);
+    var top_down = new SampleData();
+    each_frame(function(f) {
+      if (f.top_down!=null) SampleData.merge_sample_data(top_down, f.top_down);
+    });
 
-          var lbl = Util.make_label(session.stack_strings[i], 12, 0x66aadd);
-          lbl.y = y;
-          lbl.x = indent*15;
-          detail_pane.cont.addChild(lbl);
+    var total:Float = 0;
+    each_frame(function(f) { total += f.duration.as/1000; });
 
-          ping = !ping;
-          if (ping) {
-            detail_pane.cont.graphics.beginFill(0xffffff, 0.02);
-            detail_pane.cont.graphics.drawRect(0,y,detail_pane.innerWidth,lbl.height);
-          }
+    var y:Float = 0;
+    var ping = true;
+    function display_samples(ptr:SampleData, indent:Int=0):Void
+    {
+      var keys = ptr.children.keys();
+      for (i in keys) {
+        var sample = ptr.children.get(i);
 
-          // I'd use round, but Scout seems to use floor
-          var pct = Math.max(0, Math.min(100, Math.floor(100*sample.total_time/total)))+"%";
-          var x:Float = detail_pane.innerWidth - 20;
-          lbl = Util.make_label(pct, 12, 0xeeeeee);
-          lbl.y = y;
-          lbl.x = x - lbl.width;
-          detail_pane.cont.addChild(lbl);
-          x -= 60;
+        var lbl = Util.make_label(session.stack_strings[i], 12, 0x66aadd);
+        lbl.y = y;
+        lbl.x = indent*15;
+        detail_pane.cont.addChild(lbl);
 
-          lbl = Util.make_label(cast(sample.total_time), 12, 0xeeeeee);
-          lbl.y = y;
-          lbl.x = x - lbl.width;
-          detail_pane.cont.addChild(lbl);
-          x -= 80;
-
-          // I'd use round, but Scout seems to use floor
-          var pct = Math.max(0, Math.min(100, Math.floor(100*sample.self_time/total)))+"%";
-          lbl = Util.make_label(pct, 12, 0xeeeeee);
-          lbl.y = y;
-          lbl.x = x - lbl.width;
-          detail_pane.cont.addChild(lbl);
-          x -= 60;
-
-          lbl = Util.make_label(cast(sample.self_time), 12, 0xeeeeee);
-          lbl.y = y;
-          lbl.x = x - lbl.width;
-          detail_pane.cont.addChild(lbl);
-
-          y += lbl.height;
-          display_samples(sample, indent+1);
+        ping = !ping;
+        if (ping) {
+          detail_pane.cont.graphics.beginFill(0xffffff, 0.02);
+          detail_pane.cont.graphics.drawRect(0,y,detail_pane.innerWidth,lbl.height);
         }
+
+        // I'd use round, but Scout seems to use floor
+        var pct = Math.max(0, Math.min(100, Math.floor(100*sample.total_time/total)))+"%";
+        var x:Float = detail_pane.innerWidth - 20;
+        lbl = Util.make_label(pct, 12, 0xeeeeee);
+        lbl.y = y;
+        lbl.x = x - lbl.width;
+        detail_pane.cont.addChild(lbl);
+        x -= 60;
+
+        lbl = Util.make_label(cast(sample.total_time), 12, 0xeeeeee);
+        lbl.y = y;
+        lbl.x = x - lbl.width;
+        detail_pane.cont.addChild(lbl);
+        x -= 80;
+
+        // I'd use round, but Scout seems to use floor
+        var pct = Math.max(0, Math.min(100, Math.floor(100*sample.self_time/total)))+"%";
+        lbl = Util.make_label(pct, 12, 0xeeeeee);
+        lbl.y = y;
+        lbl.x = x - lbl.width;
+        detail_pane.cont.addChild(lbl);
+        x -= 60;
+
+        lbl = Util.make_label(cast(sample.self_time), 12, 0xeeeeee);
+        lbl.y = y;
+        lbl.x = x - lbl.width;
+        detail_pane.cont.addChild(lbl);
+
+        y += lbl.height;
+        display_samples(sample, indent+1);
       }
-      display_samples(frame.top_down);
     }
+    display_samples(top_down);
+    
   }
 
   public static function time_format(usec):String

@@ -172,8 +172,9 @@ class FLMListener {
           cur_frame.duration.total += t.delta;
 
           if (t.span>cur_frame.duration.total) {
-            if (name!='.network.localconnection.idle') {
-              trace("Event larger ("+t.span+") than current frame ("+cur_frame.duration.total+"): "+data);
+            if (name!='.network.localconnection.idle' &&
+                name!='.rend.screen') {
+              trace("??? Event larger ("+t.span+") than current frame ("+cur_frame.duration.total+"): "+data);
             }
           }
 

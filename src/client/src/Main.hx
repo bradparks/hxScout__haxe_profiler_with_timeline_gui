@@ -18,6 +18,8 @@ class Main extends Sprite {
 
     setup_stage();
 
+    //cpp.vm.Profiler.start(); // requires HXCPP_STACK_TRACE in project.xml
+
     function on_server_connected(s:Socket) {
       trace("Got socket: "+s);
       addChildAt(gui = new HXScoutClientGUI(), 0);
@@ -470,16 +472,16 @@ class HXScoutClientGUI extends Sprite
       add_rect(i, timing_pane, frame.duration.as/layout.timing.scale, 0x2288cc, true);
       add_rect(i, timing_pane, frame.duration.rend/layout.timing.scale, 0x66aa66, true);
 
-      /*var s = timing_pane.cont.getChildAt(i);
+      var s = timing_shapes[Math.floor(i/16)];
       var m = new flash.geom.Matrix();
-      m.translate(s.x, 0);
+      //m.translate(0, 0);
       var sc:Float = nav_pane.innerHeight/timing_pane.innerHeight;
-      m.scale(nav_scalex*1/layout.frame_width, -sc);
+      m.scale(nav_scalex*1/layout.frame_width, sc);
       m.translate(0, nav_pane.innerHeight);
+
+      cast(nav_pane.cont.getChildAt(0)).bitmapData.draw(s, m, null, openfl.display.BlendMode.LIGHTEN);
       cast(nav_pane.cont.getChildAt(0)).bitmapData.draw(s, m);
-      m.translate(0,0.5);
       cast(nav_pane.cont.getChildAt(0)).bitmapData.draw(s, m);
-      */
 
       if (!session.temp_running_mem.exists("total")) continue;
 
@@ -504,18 +506,17 @@ class HXScoutClientGUI extends Sprite
     }
 
     // scale nav cont to fit
-    if (last_frame_drawn*nav_scalex > nav_pane.innerWidth*0.98) {
+    if (last_frame_drawn*nav_scalex > nav_pane.innerWidth*0.99) {
+      var rescale = 0.95;
       var bd:BitmapData = new BitmapData(2048, layout.nav.height, true, 0x0);
       var m = new flash.geom.Matrix();
-      m.scale(0.8, 1);
-      bd.draw(timing_pane.cont.getChildAt(0), m);
-
+      m.scale(rescale, 1);
+      bd.draw(nav_pane.cont, m, null, null, null, true);
+     
       cast(nav_pane.cont.getChildAt(0)).bitmapData.dispose();
       cast(nav_pane.cont.getChildAt(0)).bitmapData = bd;
-      nav_scalex *= 0.8;
+      nav_scalex *= rescale;
     }
-
-    //nav_cont.getChildAt(0).scaleX = 2048 / (Math.max(1, last_frame_drawn)*);
   }
 
   private var stack_y:Float = 0;
@@ -529,16 +530,11 @@ class HXScoutClientGUI extends Sprite
     while (arr.length<=idx) arr.push(new Shape());
     var s:Shape = arr[idx];
 
-    //while (pane.cont.numChildren<=id) pane.cont.addChild(new Shape());
-    //var s:Shape = cast(pane.cont.getChildAt(id));
     s.graphics.beginFill(color);
     s.graphics.drawRect(id*layout.frame_width,-value-stack_y,layout.frame_width-1,value);
     s.graphics.endFill();
-    //s.x = id*layout.frame_width;
-    //s.y = -s.height-stack_y;
-    if (stack) stack_y += value;
 
-    //pane.cont.addChild(s);
+    if (stack) stack_y += value;
   }
 }
 
@@ -623,6 +619,12 @@ class SelectionController {
 
     selection = new Shape();
     memory_pane.addChild(selection);
+
+    function add(e:Event) {
+      AEL.remove(selection, Event.ADDED_TO_STAGE, add);
+      selection.stage.addEventListener(Event.ENTER_FRAME, handle_enter_frame);
+    }
+    AEL.add(selection, Event.ADDED_TO_STAGE, add);
   }
 
   function handle_select_start(e:Event)
@@ -654,8 +656,16 @@ class SelectionController {
     redraw();
   }
 
-  public function redraw()
+  private var invalid:Bool = false;
+  public function redraw() { invalid = true; }
+  private function handle_enter_frame(e:Event):Void
   {
+    if (!invalid) return;
+    invalid = false;
+
+    var start = Std.int(Math.min(start_sel, end_sel));
+    var end = Std.int(Math.max(start_sel, end_sel));
+
     selection.graphics.clear();
     while (detail_pane.cont.numChildren>0) detail_pane.cont.removeChildAt(0);
     while (summary_pane.cont.numChildren>0) summary_pane.cont.removeChildAt(0);
@@ -663,9 +673,6 @@ class SelectionController {
 
     var session:FLMSession = get_active_session();
     if (session==null) return;
-
-    var start = Std.int(Math.min(start_sel, end_sel));
-    var end = Std.int(Math.max(start_sel, end_sel));
 
     if (start<1) start=1;
     if (end>session.frames.length) end = session.frames.length;

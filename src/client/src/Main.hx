@@ -301,6 +301,7 @@ class HXScoutClientGUI extends Sprite
 
   private var active_session = -1;
   private var last_frame_drawn = -1;
+  private var nav_scalex:Float = 1;
 
   private var nav_ctrl:NavController;
   private var sel_ctrl:SelectionController;
@@ -324,7 +325,7 @@ class HXScoutClientGUI extends Sprite
     addChild(detail_pane);
 
     sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, detail_pane, summary_pane, layout, get_active_session);
-    nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane, sel_ctrl);
+    nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane, sel_ctrl, function() { return layout.frame_width/nav_scalex; });
 
     addEventListener(Event.ENTER_FRAME, on_enter_frame);
   }
@@ -381,6 +382,7 @@ class HXScoutClientGUI extends Sprite
     var ses:Sprite = cast(session_pane.cont.getChildAt(Std.parseInt(inst_id)));
     lbl.y = ses.height/2-lbl.height/2;
     lbl.x = 4;
+    lbl.mouseEnabled = false;
     ses.addChild(lbl);
   }
 
@@ -415,10 +417,14 @@ class HXScoutClientGUI extends Sprite
     last_frame_drawn = -1;
     sel_ctrl.start_sel = sel_ctrl.end_sel = -1;
     while (timing_pane.cont.numChildren>0) timing_pane.cont.removeChildAt(0);
+    timing_pane.cont.graphics.clear();
     while (memory_pane.cont.numChildren>0) memory_pane.cont.removeChildAt(0);
     while (detail_pane.cont.numChildren>0) detail_pane.cont.removeChildAt(0);
     while (summary_pane.cont.numChildren>0) summary_pane.cont.removeChildAt(0);
     detail_pane.cont.graphics.clear();
+
+    timing_shapes = [];
+    memory_shapes = [];
 
     var session:FLMSession = sessions[active_session];
     session.temp_running_mem = new StringMap<Int>();
@@ -429,9 +435,11 @@ class HXScoutClientGUI extends Sprite
 
   function reset_nav_pane()
   {
-    // dispose?
-    while (nav_pane.cont.numChildren>0) nav_pane.cont.removeChildAt(0);
-    nav_pane.cont.addChild(new Bitmap(new BitmapData(Std.int(nav_pane.innerWidth), Std.int(nav_pane.innerHeight), true, 0x0)));
+    if (nav_pane.cont.numChildren<1) {
+      nav_pane.cont.addChild(new Bitmap(new BitmapData(2048, layout.nav.height, true, 0x0)));
+    }
+    var bd:BitmapData = cast(nav_pane.cont.getChildAt(0)).bitmapData;
+    bd.fillRect(new flash.geom.Rectangle(0,0,2048,layout.nav.height), 0); // clear
   }
 
   var mem_types = ["used","telemetry.overhead","managed.used","managed","total","bitmap"];
@@ -462,6 +470,17 @@ class HXScoutClientGUI extends Sprite
       add_rect(i, timing_pane, frame.duration.as/layout.timing.scale, 0x2288cc, true);
       add_rect(i, timing_pane, frame.duration.rend/layout.timing.scale, 0x66aa66, true);
 
+      /*var s = timing_pane.cont.getChildAt(i);
+      var m = new flash.geom.Matrix();
+      m.translate(s.x, 0);
+      var sc:Float = nav_pane.innerHeight/timing_pane.innerHeight;
+      m.scale(nav_scalex*1/layout.frame_width, -sc);
+      m.translate(0, nav_pane.innerHeight);
+      cast(nav_pane.cont.getChildAt(0)).bitmapData.draw(s, m);
+      m.translate(0,0.5);
+      cast(nav_pane.cont.getChildAt(0)).bitmapData.draw(s, m);
+      */
+
       if (!session.temp_running_mem.exists("total")) continue;
 
       // trace(session.temp_running_mem); // mem debug
@@ -472,27 +491,54 @@ class HXScoutClientGUI extends Sprite
       add_rect(i, memory_pane, session.temp_running_mem.get("managed.used")/layout.MSCALE, 0x227788, true);       // ActionScript Objects
     }
     last_frame_drawn = session.frames.length-1;
+
+    // display only those shapes in view
+    var idx:Int = Math.floor(i/16);
+    while (timing_pane.cont.numChildren>0) timing_pane.cont.removeChildAt(0);
+    while (memory_pane.cont.numChildren>0) memory_pane.cont.removeChildAt(0);
+    var i0 = Math.floor((timing_pane.cont.scrollRect.x)/(16*layout.frame_width));
+    for (offset in 0...Math.ceil(timing_pane.innerWidth/(layout.frame_width*16))+1) {
+      i = offset + i0;
+      if (i>=0 && i<timing_shapes.length) timing_pane.cont.addChild(timing_shapes[i]);
+      if (i>=0 && i<memory_shapes.length) memory_pane.cont.addChild(memory_shapes[i]);
+    }
+
+    // scale nav cont to fit
+    if (last_frame_drawn*nav_scalex > nav_pane.innerWidth*0.98) {
+      var bd:BitmapData = new BitmapData(2048, layout.nav.height, true, 0x0);
+      var m = new flash.geom.Matrix();
+      m.scale(0.8, 1);
+      bd.draw(timing_pane.cont.getChildAt(0), m);
+
+      cast(nav_pane.cont.getChildAt(0)).bitmapData.dispose();
+      cast(nav_pane.cont.getChildAt(0)).bitmapData = bd;
+      nav_scalex *= 0.8;
+    }
+
+    //nav_cont.getChildAt(0).scaleX = 2048 / (Math.max(1, last_frame_drawn)*);
   }
 
   private var stack_y:Float = 0;
+  private var timing_shapes:Array<Shape> = [];
+  private var memory_shapes:Array<Shape> = [];
   private inline function add_rect(id:Int, pane:Pane, value:Float, color:Int, stack:Bool) {
     if (!stack) stack_y = 0;
-    var s:Shape = new Shape();
-    s.graphics.beginFill(color);
-    s.graphics.drawRect(0,0,layout.frame_width-1,value);
-    s.x = id*layout.frame_width;
-    s.y = -s.height-stack_y;
-    pane.cont.addChild(s);
-    if (stack) stack_y += s.height;
 
-    if (pane==timing_pane) {
-      var m = new flash.geom.Matrix();
-      m.translate(s.x, 0);
-      var sc:Float = nav_pane.innerHeight/timing_pane.innerHeight;
-      m.scale(1/layout.frame_width, -sc);
-      m.translate(0, nav_pane.innerHeight);
-      cast(nav_pane.cont.getChildAt(0)).bitmapData.draw(s, m, null, openfl.display.BlendMode.ADD);
-    }
+    var idx:Int = Math.floor(id/16);
+    var arr = (pane==timing_pane) ? timing_shapes : memory_shapes;
+    while (arr.length<=idx) arr.push(new Shape());
+    var s:Shape = arr[idx];
+
+    //while (pane.cont.numChildren<=id) pane.cont.addChild(new Shape());
+    //var s:Shape = cast(pane.cont.getChildAt(id));
+    s.graphics.beginFill(color);
+    s.graphics.drawRect(id*layout.frame_width,-value-stack_y,layout.frame_width-1,value);
+    s.graphics.endFill();
+    //s.x = id*layout.frame_width;
+    //s.y = -s.height-stack_y;
+    if (stack) stack_y += value;
+
+    //pane.cont.addChild(s);
   }
 }
 
@@ -501,13 +547,15 @@ class NavController {
   private var timing_pane:Pane;
   private var memory_pane:Pane;
   private var sel_ctrl:SelectionController;
+  private var get_nav_factor:Void->Float;
 
-  public function new (nav_pane, timing_pane, memory_pane, sel_ctrl):Void
+  public function new (nav_pane, timing_pane, memory_pane, sel_ctrl, get_nav_factor):Void
   {
     this.nav_pane = nav_pane;
     this.timing_pane = timing_pane;
     this.memory_pane = memory_pane;
     this.sel_ctrl = sel_ctrl;
+    this.get_nav_factor = get_nav_factor;
 
     AEL.add(nav_pane, MouseEvent.MOUSE_DOWN, handle_nav_start);
   }
@@ -538,7 +586,7 @@ class NavController {
 
     var r = new flash.geom.Rectangle();
     r.copyFrom(timing_pane.cont.scrollRect);
-    r.x = x*6; // layout.frame_width
+    r.x = x*get_nav_factor(); // layout.frame_width
     timing_pane.cont.scrollRect = r;
     memory_pane.cont.scrollRect = r;
 

@@ -628,10 +628,13 @@ class SelectionController {
 
     var num_frames:Int = end-start+1;
 
+    var sy:Float = -layout.timing.height+2;
+    selection.y = sy;
+    selection.scrollRect = new flash.geom.Rectangle(0,sy,timing_pane.width,2*layout.timing.height-3);
     selection.graphics.lineStyle(1, 0xffffff, 0.5);
     selection.graphics.beginFill(0xffffff, 0.15);
     selection.graphics.drawRect(start*layout.frame_width - timing_pane.cont.scrollRect.x,
-                                -layout.timing.height+2,
+                                sy,
                                 layout.frame_width*num_frames,
                                 2*layout.timing.height-5);
 

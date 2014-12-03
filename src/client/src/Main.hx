@@ -213,6 +213,7 @@ class FLMSession {
   public var name:String;
   public var stack_strings:Array<String> = ["1-indexed"];
   public var ses_tile:Sprite;
+  public var last_nav_sel:Array<Int>;
 
   public function new(iid:String)
   {
@@ -396,7 +397,6 @@ class HXScoutClientGUI extends Sprite
   {
     trace("GUI got new session: "+flm_session.inst_id);
     var s:Sprite = flm_session.ses_tile = new Sprite();
-    s.alpha = 0.3;
     sessions.push(flm_session);
     if (active_session<0) {
       set_active_session(sessions.length-1);
@@ -419,12 +419,19 @@ class HXScoutClientGUI extends Sprite
 
   public function set_active_session(n:Int)
   {
+    if (active_session==n) return;
+    if (n>=sessions.length) return; // invalid
+
+    if (active_session>=0) { // save current nav/sel
+      var session:FLMSession = sessions[active_session];
+      session.last_nav_sel = [Std.int(timing_pane.cont.scrollRect.x), sel_ctrl.start_sel, sel_ctrl.end_sel];
+    }
+
     for (i in 0...sessions.length) {
-      sessions[i].ses_tile.alpha = i==n ? 1 : 0.3;
+      sessions[i].ses_tile.transform.colorTransform = i==n ? new openfl.geom.ColorTransform(1,1.03,1.08,1,20,20,20) : null;
       if (sessions[i].ses_tile.numChildren>0) sessions[i].ses_tile.getChildAt(0).alpha = 1;
     }
 
-    if (n>=sessions.length) return;
     active_session = n;
     last_frame_drawn = -1;
     sel_ctrl.start_sel = sel_ctrl.end_sel = -1;
@@ -438,11 +445,25 @@ class HXScoutClientGUI extends Sprite
     timing_shapes = [];
     memory_shapes = [];
 
+    reset_nav_pane();
+    resize(stage.stageWidth, stage.stageHeight);
+
+    if (n<0) return; // -1 is idle / no active session
+
     var session:FLMSession = sessions[active_session];
     session.temp_running_mem = new StringMap<Int>();
 
-    reset_nav_pane();
-    resize(stage.stageWidth, stage.stageHeight);
+    // Restore nav/sel
+    if (session.last_nav_sel==null) session.last_nav_sel = [0, -1, -1];
+    var r = timing_pane.cont.scrollRect;
+    r.x = session.last_nav_sel[0];
+    timing_pane.cont.scrollRect = r;
+    var r = memory_pane.cont.scrollRect;
+    r.x = session.last_nav_sel[0];
+    memory_pane.cont.scrollRect = r;
+    sel_ctrl.start_sel = session.last_nav_sel[1];
+    sel_ctrl.end_sel = session.last_nav_sel[2];
+    sel_ctrl.redraw();
   }
 
   function reset_nav_pane()
@@ -835,7 +856,7 @@ class Pane extends Sprite {
 
   public var cont(get, null):Sprite;
   var backdrop:Shape;
-  var scrollbars:Sprite;
+  var scrollbars:Shape;
 
   var _width:Float;
   var _height:Float;
@@ -853,6 +874,8 @@ class Pane extends Sprite {
     _scrollbarx = scrollbarx;
     _scrollbary = scrollbary;
 
+    if (bottom_aligned && scrollbary) throw "This combination of options is not yet supported";
+
     backdrop = new Shape();
     addChild(backdrop);
 
@@ -861,7 +884,7 @@ class Pane extends Sprite {
     cont.scrollRect = new flash.geom.Rectangle(0,_bottom_aligned?-h:h,w,h);
     cont.x = cont.y = PAD;
 
-    scrollbars = new Sprite();
+    scrollbars = new Shape();
     addChild(scrollbars);
 
     AEL.add(this, MouseEvent.MOUSE_WHEEL, handle_scroll_wheel);
@@ -924,6 +947,7 @@ class Pane extends Sprite {
 
     scrollbars.graphics.clear();
     if (_scrollbary && rect.height<bounds.height) {
+      scrollbars.graphics.lineStyle(1, 0x0,0.2);
       scrollbars.graphics.beginFill(0xffffff,0.2);
       scrollbars.graphics.drawRoundRect(rect.width+1,
                                         PAD,
@@ -934,23 +958,28 @@ class Pane extends Sprite {
       var scrollbar_h = (rect.height/10)*(1-pct) + (rect.height)*pct;
       var scroll_pct = rect.y/(bounds.height-rect.height);
       var scroll_y = (rect.height-scrollbar_h)*scroll_pct;
-      scrollbars.graphics.drawRoundRect(rect.width+1,
+      scrollbars.graphics.lineStyle(1, 0xffffff,0.2);
+      scrollbars.graphics.beginFill(0xcccccc,0.4);
+      scrollbars.graphics.drawRoundRect(rect.width+2,
                                         PAD+scroll_y,
-                                        PAD,
+                                        PAD-2,
                                         scrollbar_h,
                                         PAD);
     }
     if (_scrollbarx && rect.width<bounds.width) {
+      scrollbars.graphics.lineStyle(1, 0x0,0.2);
       scrollbars.graphics.beginFill(0xffffff,0.2);
       scrollbars.graphics.drawRoundRect(PAD,
-                                        rect.height+1,
+                                        rect.height+2,
                                         rect.width,
-                                        PAD,
+                                        PAD-2,
                                         PAD);
       var pct = rect.width/bounds.width;
       var scrollbar_w = (rect.width/10)*(1-pct) + (rect.width)*pct;
       var scroll_pct = rect.x/(bounds.width-rect.width);
       var scroll_x = (rect.width-scrollbar_w)*scroll_pct;
+      scrollbars.graphics.lineStyle(1, 0xffffff,0.2);
+      scrollbars.graphics.beginFill(0xcccccc,0.4);
       scrollbars.graphics.drawRoundRect(PAD+scroll_x,
                                         rect.height+1,
                                         scrollbar_w,

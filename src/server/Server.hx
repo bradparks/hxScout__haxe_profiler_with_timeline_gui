@@ -209,6 +209,7 @@ class FLMListener {
           else if (name.indexOf(".exit")==0) cur_frame.duration.other += self_time;
           else if (name.indexOf(".rend.")==0) cur_frame.duration.rend += self_time;
           else if (name.indexOf(".swf.")==0) cur_frame.duration.other += self_time;
+          else if (name.indexOf(".network.")==0) cur_frame.duration.net += self_time;
           else {
             cur_frame.duration.other += self_time;
             cur_frame.duration.unknown += self_time;
@@ -306,6 +307,7 @@ class Frame {
     duration.as = 0;
     duration.gc = 0;
     duration.other = 0;
+    duration.net = 0;
     duration.rend = 0;
     duration.swf = 0;
     duration.unknown = 0;

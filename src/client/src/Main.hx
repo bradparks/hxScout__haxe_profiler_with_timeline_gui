@@ -87,16 +87,16 @@ class Main extends Sprite {
   function center(e=null) {
     this.x = stage.stageWidth/2;
     this.y = stage.stageHeight/2;
-    fps.x = -this.x;
-    fps.y = -this.y;
+    //fps.x = -this.x;
+    //fps.y = -this.y;
     if (gui!=null) gui.resize(stage.stageWidth, stage.stageHeight);
   }
 
   function setup_stage()
   {
-    fps = new openfl.display.FPS(0,0,0xffffff);
-    fps.mouseEnabled = false;
-    addChild(fps);
+    //fps = new openfl.display.FPS(0,0,0xffffff);
+    //fps.mouseEnabled = false;
+    //addChild(fps);
     center();
     stage.addEventListener(flash.events.Event.RESIZE, center);
   }
@@ -203,7 +203,6 @@ class SampleData {
     }
   }
 }
-
 
 class FLMSession {
 
@@ -318,7 +317,7 @@ class HXScoutClientGUI extends Sprite
     super();
 
     nav_pane = new Pane();
-    summary_pane = new Pane();
+    summary_pane = new Pane(false, false, true); // scrolly
     timing_pane = new Pane(true);
     memory_pane = new Pane(true);
     session_pane = new Pane(false, false, true); // scrolly
@@ -344,7 +343,7 @@ class HXScoutClientGUI extends Sprite
       height:50,
     },
     timing:{
-      height:150,
+      height:180,
       scale:300
     },
     session:{
@@ -354,7 +353,7 @@ class HXScoutClientGUI extends Sprite
       width:300,
     },
     frame_width:6,
-    MSCALE:100
+    mscale:200
   }
 
   public function resize(w:Float=0, h:Float=0)
@@ -475,8 +474,6 @@ class HXScoutClientGUI extends Sprite
     bd.fillRect(new flash.geom.Rectangle(0,0,2048,layout.nav.height), 0); // clear
   }
 
-  var mem_types = ["used","telemetry.overhead","managed.used","managed","total","bitmap"];
-
   private function on_enter_frame(e:Event)
   {
     if (active_session<0) return;
@@ -486,19 +483,28 @@ class HXScoutClientGUI extends Sprite
       var frame = session.frames[i];
 
       if (Reflect.hasField(frame, "mem")) {
-        //trace(frame.mem); // mem debug
-        for (key in mem_types) {
+        //for (key in Reflect.fields(frame.mem)) { //SelectionController.mem_keys) {
+        //  if (SelectionController.mem_keys.indexOf(key)<0) {
+        //    trace("!!!!!!!!!!!!!!!!!!!!!!!");
+        //    trace(key);
+        //    trace("!!!!!!!!!!!!!!!!!!!!!!!");
+        //    SelectionController.mem_keys.push(key);
+        //  }
+        //}
+        for (key in SelectionController.mem_keys) {
           if (Reflect.hasField(frame.mem, key)) {
             session.temp_running_mem.set(key, Reflect.field(frame.mem, key));
           }
+          // Copy all keys back to each frame data for summary
+          Reflect.setField(frame.mem, key, session.temp_running_mem.exists(key) ? session.temp_running_mem.get(key) : 0);
         }
+        //trace("mem debug:");
+        //trace(frame.mem); // mem debug
       }
-
-      //trace(" -- Drawing ["+session.inst_id+"]:"+frame.id);
-      //trace(frame);
 
       add_rect(i, timing_pane, frame.duration.total/layout.timing.scale, 0x444444, false);
       add_rect(i, timing_pane, frame.duration.gc/layout.timing.scale, 0xdd5522, true);
+      add_rect(i, timing_pane, frame.duration.net/layout.timing.scale, 0xcccc66, true);
       add_rect(i, timing_pane, frame.duration.other/layout.timing.scale, 0xaa4488, true);
       add_rect(i, timing_pane, frame.duration.as/layout.timing.scale, 0x2288cc, true);
       add_rect(i, timing_pane, frame.duration.rend/layout.timing.scale, 0x66aa66, true);
@@ -518,10 +524,12 @@ class HXScoutClientGUI extends Sprite
 
       // trace(session.temp_running_mem); // mem debug
 
-      add_rect(i, memory_pane, session.temp_running_mem.get("total")/layout.MSCALE, 0x444444, false);             // Current Total Memory
-      add_rect(i, memory_pane, session.temp_running_mem.get("telemetry.overhead")/layout.MSCALE, 0x667755, true); // In other?
-      add_rect(i, memory_pane, session.temp_running_mem.get("bitmap")/layout.MSCALE, 0x22aa99, true);             // TODO: category
-      add_rect(i, memory_pane, session.temp_running_mem.get("managed.used")/layout.MSCALE, 0x227788, true);       // ActionScript Objects
+      add_rect(i, memory_pane, session.temp_running_mem.get("total")/layout.mscale, 0x444444, false);             // Current Total Memory
+      add_rect(i, memory_pane, session.temp_running_mem.get("telemetry.overhead")/layout.mscale, 0x667755, true); // In other?
+      add_rect(i, memory_pane, session.temp_running_mem.get("script")/layout.mscale, 0x119944, true); // In other?
+      add_rect(i, memory_pane, session.temp_running_mem.get("bytearray")/layout.mscale, 0x11cc77, true); // In other?
+      add_rect(i, memory_pane, session.temp_running_mem.get("bitmap")/layout.mscale, 0x22aa99, true);             // TODO: category
+      add_rect(i, memory_pane, session.temp_running_mem.get("managed.used")/layout.mscale, 0x227788, true);       // ActionScript Objects
     }
     last_frame_drawn = session.frames.length-1;
 
@@ -683,6 +691,32 @@ class SelectionController {
     redraw();
   }
 
+  // Others seen:
+  // - bytearray.alchemy
+  // - bitmap.image
+  // - network
+  // - network.shared
+  // - bitmap.source
+
+  public static var mem_keys = ["total","used","managed.used","bitmap","bytearray","script","network","telemetry.overhead","managed","bitmap.display","bitmap.data"];
+  private static var mem_info = {
+    "managed.used":{ name:"ActionScript Objects", color:0x227788 },
+    "bitmap":{ name:"Bitmap", color:0x22aa99 },
+    "telemetry.overhead":{ name:"Other", color:0x667755 },
+    "network":{ redirect:"telemetry.overhead" }, // Also 'other', Network Buffers
+    "script":{ name:"SWF Files", color:0x119944 },
+    "bytearray":{ name:"ByteArrays", color:0x11bb66 }
+  }
+
+  private static var timing_keys = ["as", "rend", "net", "gc", "other"];
+  private static var timing_info = {
+    "as":{ name:"ActionScript", color:0x2288cc },
+    "rend":{ name:"Rendering", color:0x66aa66 },
+    "net":{ name:"Network", color:0xcccc66 },
+    "gc":{ name:"Garbage Collection", color:0xdd5522 },
+    "other":{ name:"Other", color:0xaa4488 }
+  }
+
   private var invalid:Bool = false;
   public function redraw() { invalid = true; }
   private function handle_enter_frame(e:Event):Void
@@ -697,6 +731,7 @@ class SelectionController {
     while (detail_pane.cont.numChildren>0) detail_pane.cont.removeChildAt(0);
     while (summary_pane.cont.numChildren>0) summary_pane.cont.removeChildAt(0);
     detail_pane.cont.graphics.clear();
+    summary_pane.cont.graphics.clear();
 
     var session:FLMSession = get_active_session();
     if (session==null) return;
@@ -728,55 +763,163 @@ class SelectionController {
       for (idx in start...end+1) f(session.frames[idx-1]);
     }
 
+    // - - - - - - - - - - -
     // - - Summary pane - -
-    if (frame.duration!=null) {
-      var lbl = Util.make_label("Framerate", 12, 0x777777, -1, "DroidSans-Bold.ttf");
-      lbl.y = 0;
-      lbl.x = 0;
-      summary_pane.cont.addChild(lbl);
+    // - - - - - - - - - -
+    var lbl = Util.make_label("Framerate", 12, 0x777777, -1, "DroidSans-Bold.ttf");
+    lbl.y = 5;
+    lbl.x = 10;
+    summary_pane.cont.addChild(lbl);
 
-      var total = 0;
-      each_frame(function(f) { total += f.duration.total; });
-
-      var unit:Int = Math.floor(num_frames*1000000/total);
-      var dec:Int = Math.floor(num_frames*10000000/total)-10*unit;
-      var fps = Util.make_label((unit+"."+dec+" fps"), 18, 0xeeeeee);
-      fps.y = lbl.height;
-      fps.x = 0;
-      summary_pane.cont.addChild(fps);
-
-      var flbl = Util.make_label("Frame"+(start==end?"":"s"), 12, 0x777777, -1, "DroidSans-Bold.ttf");
-      flbl.y = 0;
-      flbl.x = lbl.x + lbl.width*1.4;
-      summary_pane.cont.addChild(flbl);
-
-      var ftxt = Util.make_label(start+(start==end?"":" - "+end), 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
-      ftxt.y = 0;
-      ftxt.x = flbl.x + flbl.width*1.15;
-      summary_pane.cont.addChild(ftxt);
-
-      var tlbl = Util.make_label("Time", 12, 0x777777, -1, "DroidSans-Bold.ttf");
-      tlbl.y = fps.y + fps.height - tlbl.height;
-      tlbl.x = lbl.x + lbl.width*1.4;
-      summary_pane.cont.addChild(tlbl);
-
-      var t = time_format(frame.offset)+" - "+time_format(end_frame.offset+end_frame.duration.total);
-
-      var ttxt = Util.make_label(t, 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
-      ttxt.y = tlbl.y;
-      ttxt.x = ftxt.x;
-      summary_pane.cont.addChild(ttxt);
-
-    }
-
-    // - - Detail / Samples pane - -
-    var top_down = new SampleData();
+    var total = 0;
+    var active = 0;
+    var durations = new StringMap<Int>();
+    var mem = new StringMap<Int>();
+    var mem_used = 0;
     each_frame(function(f) {
-      if (f.top_down!=null) SampleData.merge_sample_data(top_down, f.top_down);
+      total += f.duration.total;
+      for (key in timing_keys) {
+        if (!durations.exists(key)) durations.set(key, 0);
+        var val = Reflect.field(f.duration, key); 
+        durations.set(key, durations.get(key)+val);
+        active += val;
+      }
+      for (key in mem_keys) {
+        var info = Reflect.field(mem_info, key);
+        var val = Reflect.field(f.mem, key);
+        if (info!=null && Reflect.hasField(info, "redirect")) {
+          key = Reflect.field(info, "redirect");
+        }
+        if (info!=null) mem_used += val;
+        if (!mem.exists(key)) mem.set(key, 0);
+        mem.set(key, mem.get(key)+val);
+      }
     });
 
+    var unit:Int = Math.floor(num_frames*1000000/total);
+    var dec:Int = Math.floor(num_frames*10000000/total)-10*unit;
+    var fps = Util.make_label((unit+"."+dec+" fps"), 18, 0xeeeeee);
+    fps.y = lbl.height;
+    fps.x = 10;
+    summary_pane.cont.addChild(fps);
+
+    // Please forgive my utter disregard for any sane variable
+    // naming and reuse convention, bwa ha ha!
+    var flbl = Util.make_label("Frame"+(start==end?"":"s"), 12, 0x777777, -1, "DroidSans-Bold.ttf");
+    flbl.y = 5;
+    flbl.x = lbl.x + lbl.width*1.3;
+    summary_pane.cont.addChild(flbl);
+
+    var tlbl = Util.make_label("Time", 12, 0x777777, -1, "DroidSans-Bold.ttf");
+    tlbl.y = fps.y + fps.height - tlbl.height;
+    tlbl.x = lbl.x + lbl.width*1.3;
+    summary_pane.cont.addChild(tlbl);
+
+    var ftxt = Util.make_label(start+(start==end?"":" - "+end), 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
+    ftxt.y = 5;
+    ftxt.x = flbl.x + tlbl.width*1.45;
+    summary_pane.cont.addChild(ftxt);
+
+    var t = Util.time_format(frame.offset)+" - "+Util.time_format(end_frame.offset+end_frame.duration.total);
+
+    var ttxt = Util.make_label(t, 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
+    ttxt.y = tlbl.y;
+    ttxt.x = ftxt.x;
+    summary_pane.cont.addChild(ttxt);
+
+    // Timing summary
+    var ttlbl = Util.make_label("Total Frame Time", 12, 0x777777);
+    ttlbl.y = fps.y + fps.height + tlbl.height;
+    ttlbl.x = 10;
+    summary_pane.cont.addChild(ttlbl);
+
+    var tttxt = Util.make_label(Util.add_commas(Math.floor(total/1000))+" ms", 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
+    tttxt.y = ttlbl.y;
+    tttxt.x = ftxt.x + 30 - tttxt.width + 21;
+    summary_pane.cont.addChild(tttxt);
+
+    var tlbl = Util.make_label("Active Time", 12, 0x777777);
+    tlbl.y = ttlbl.y + ttlbl.height;
+    tlbl.x = 10;
+    summary_pane.cont.addChild(tlbl);
+
+    var ttxt = Util.make_label(Util.add_commas(Math.floor(active/1000))+"", 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
+    ttxt.y = tlbl.y;
+    ttxt.x = ftxt.x + 30 - ttxt.width;
+    summary_pane.cont.addChild(ttxt);
+
+    var y:Float = tlbl.y + tlbl.height;
+    for (key in timing_keys) {
+      var val = Reflect.field(timing_info, key);
+      var albl = Util.make_label(val.name, 12, val.color);
+      albl.y = y;
+      albl.x = 20;
+      summary_pane.cont.addChild(albl);
+      var aval = Util.make_label(Util.add_commas(Math.floor(durations.get(key)/1000))+"", 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
+      aval.y = albl.y;
+      aval.x = ftxt.x + 30 - aval.width;
+      summary_pane.cont.addChild(aval);
+   
+      summary_pane.cont.graphics.beginFill(0xffffff, 0.07);
+      summary_pane.cont.graphics.drawRect(10, albl.y, summary_pane.innerWidth-20, albl.height-1);
+      summary_pane.cont.graphics.beginFill(val.color);
+      summary_pane.cont.graphics.drawRect(10, albl.y, 5, albl.height-1);
+      summary_pane.cont.graphics.drawRect(ftxt.x + 35, albl.y, ((summary_pane.innerWidth-20)-(ftxt.x + 35))/active*durations.get(key), albl.height-1);
+      y += albl.height;
+    }
+
+    // Memory summary
+    var ttlbl = Util.make_label("Average Total Mem", 12, 0x777777);
+    ttlbl.y = y + tlbl.height;
+    ttlbl.x = 10;
+    summary_pane.cont.addChild(ttlbl);
+
+    var tttxt = Util.make_label(Util.add_commas(Math.floor(mem.get("total")/num_frames))+" KB", 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
+    tttxt.y = ttlbl.y;
+    tttxt.x = ftxt.x + 30 - tttxt.width + 19;
+    summary_pane.cont.addChild(tttxt);
+
+    var tlbl = Util.make_label("Used Memory", 12, 0x777777);
+    tlbl.y = ttlbl.y + ttlbl.height;
+    tlbl.x = 10;
+    summary_pane.cont.addChild(tlbl);
+
+    var ttxt = Util.make_label(Util.add_commas(Math.floor(mem_used/num_frames))+"", 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
+    ttxt.y = tlbl.y;
+    ttxt.x = ftxt.x + 30 - ttxt.width;
+    summary_pane.cont.addChild(ttxt);
+
+    var y:Float = tlbl.y + tlbl.height;
+    for (key in mem_keys) {
+      var val = Reflect.field(mem_info, key);
+      if (val==null) continue; // total and used are not in info
+      if (Reflect.hasField(val, "redirect")) continue;
+      var albl = Util.make_label(val.name, 12, val.color);
+      albl.y = y;
+      albl.x = 20;
+      summary_pane.cont.addChild(albl);
+      var aval = Util.make_label(Util.add_commas(Math.floor(mem.get(key)/num_frames))+"", 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
+      aval.y = albl.y;
+      aval.x = ftxt.x + 30 - aval.width;
+      summary_pane.cont.addChild(aval);
+   
+      summary_pane.cont.graphics.beginFill(0xffffff, 0.07);
+      summary_pane.cont.graphics.drawRect(10, albl.y, summary_pane.innerWidth-20, albl.height-1);
+      summary_pane.cont.graphics.beginFill(val.color);
+      summary_pane.cont.graphics.drawRect(10, albl.y, 5, albl.height-1);
+      summary_pane.cont.graphics.drawRect(ftxt.x + 35, albl.y, ((summary_pane.innerWidth-20)-(ftxt.x + 35))/mem.get("used")*mem.get(key), albl.height-1);
+      y += albl.height;
+    }
+
+    // - - - - - - - - - - - - - - -
+    // - - Detail / Samples pane - -
+    // - - - - - - - - - - - - - - -
+    var top_down = new SampleData();
     var total:Float = 0;
-    each_frame(function(f) { total += f.duration.as/1000; });
+    each_frame(function(f) {
+      if (f.top_down!=null) SampleData.merge_sample_data(top_down, f.top_down);
+       total += f.duration.as/1000;
+    });
 
     var y:Float = 0;
     var ping = true;
@@ -830,23 +973,6 @@ class SelectionController {
       }
     }
     display_samples(top_down);
-  }
-
-  public static function time_format(usec):String
-  {
-    var sec:Float = usec/1000000;
-    var rtn = "";
-    var min = Math.floor(sec/60);
-    rtn += min+":";
-    sec = sec%60;
-    if (sec<10) rtn += "0";
-    rtn += Math.floor(sec)+".";
-    var dec = Math.floor((sec%1)*1000);
-    if (dec<1) rtn += "000";
-    else if (dec<10) rtn += "00";
-    else if (dec<100) rtn += "0";
-    rtn += dec;
-    return rtn;
   }
 }
 

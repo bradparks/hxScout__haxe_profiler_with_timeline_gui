@@ -131,6 +131,36 @@ class Util {
     Actuate.tween(d, dt=0.4*0.3, { x: orig_x+6 }, false).delay(t+=dt);
     Actuate.tween(d, dt=0.4*0.15, { x: orig_x }, false).delay(t+=dt);
   }
-                                   
 
+  public static function add_commas(i:Int, sep:String=','):String
+  {
+    if (i==0) return "0";
+    var neg = false;
+    var cnt = 0;
+    var rtn = "";
+    if (i<0) { neg = true; i = -i; }
+    while (i>0) {
+      rtn = (i%10)+(cnt==0&&rtn.length>0?sep:'')+rtn;
+      i = Math.floor(i/10);
+      cnt = (cnt+1)%3;
+    }
+    return neg?'-'+rtn:rtn;
+  }
+
+  public static function time_format(usec):String
+  {
+    var sec:Float = usec/1000000;
+    var rtn = "";
+    var min = Math.floor(sec/60);
+    rtn += min+":";
+    sec = sec%60;
+    if (sec<10) rtn += "0";
+    rtn += Math.floor(sec)+".";
+    var dec = Math.floor((sec%1)*1000);
+    if (dec<1) rtn += "000";
+    else if (dec<10) rtn += "00";
+    else if (dec<100) rtn += "0";
+    rtn += dec;
+    return rtn;
+  }
 }

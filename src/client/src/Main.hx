@@ -14,6 +14,8 @@ class Main extends Sprite {
 
   public function new()
   {
+    Util.stage = stage;
+
     super();
 
     setup_stage();
@@ -316,8 +318,8 @@ class HXScoutClientGUI extends Sprite
     summary_pane = new Pane();
     timing_pane = new Pane(true);
     memory_pane = new Pane(true);
-    session_pane = new Pane();
-    detail_pane = new Pane();
+    session_pane = new Pane(false, false, true); // scrolly
+    detail_pane = new Pane(false, false, true);  // scrolly
 
     addChild(nav_pane);
     addChild(summary_pane);
@@ -620,11 +622,7 @@ class SelectionController {
     selection = new Shape();
     memory_pane.addChild(selection);
 
-    function add(e:Event) {
-      AEL.remove(selection, Event.ADDED_TO_STAGE, add);
-      selection.stage.addEventListener(Event.ENTER_FRAME, handle_enter_frame);
-    }
-    AEL.add(selection, Event.ADDED_TO_STAGE, add);
+    Util.stage.addEventListener(Event.ENTER_FRAME, handle_enter_frame);
   }
 
   function handle_select_start(e:Event)
@@ -803,7 +801,6 @@ class SelectionController {
       }
     }
     display_samples(top_down);
-    
   }
 
   public static function time_format(usec):String
@@ -828,34 +825,46 @@ class Pane extends Sprite {
 
   public static inline var PAD:Float = 6;
 
-  public var cont(default, null):Sprite;
-  var decor:Shape;
+  public var cont(get, null):Sprite;
+  var backdrop:Shape;
+  var scrollbars:Sprite;
 
   var _width:Float;
   var _height:Float;
   var _bottom_aligned:Bool;
+  var _scrollbarx:Bool;
+  var _scrollbary:Bool;
+  var _scroll_invalid:Bool;
 
-  public function new (bottom_aligned:Bool=false, w:Float=0, h:Float=0)
+  public function new (bottom_aligned:Bool=false, scrollbarx:Bool=false, scrollbary:Bool=false, w:Float=0, h:Float=0)
   {
     super();
     _bottom_aligned = bottom_aligned;
     _width = w;
     _height = h;
+    _scrollbarx = scrollbarx;
+    _scrollbary = scrollbary;
 
-    decor = new Shape();
-    addChild(decor);
+    backdrop = new Shape();
+    addChild(backdrop);
 
     cont = new Sprite();
     addChild(cont);
     cont.scrollRect = new flash.geom.Rectangle(0,_bottom_aligned?-h:h,w,h);
     cont.x = cont.y = PAD;
 
-    redraw();
+    scrollbars = new Sprite();
+    addChild(scrollbars);
+
+    AEL.add(this, MouseEvent.MOUSE_WHEEL, handle_scroll_wheel);
+    Util.stage.addEventListener(Event.ENTER_FRAME, handle_enter_frame);
+
+    resize();
   }
 
-  override public function set_width(w:Float):Float { _width = w; redraw(); return w; }
+  override public function set_width(w:Float):Float { _width = w; resize(); return w; }
   override public function get_width():Float { return _width; }
-  override public function set_height(h:Float):Float { _height = h; redraw(); return h; }
+  override public function set_height(h:Float):Float { _height = h; resize(); return h; }
   override public function get_height():Float { return _height; }
 
   public var innerWidth(get, null):Float;
@@ -865,31 +874,113 @@ class Pane extends Sprite {
 
   static var TEMP_M:flash.geom.Matrix = new flash.geom.Matrix();
 
-  private function redraw()
+  public function get_cont():Sprite {
+    _scroll_invalid = true;
+    return cont;
+  }
+
+  private function handle_scroll_wheel(e:Event):Void
+  {
+    //trace("wheel event, delta="+cast(e).delta+", sby="+_scrollbary+", scrollrect.y="+cont.scrollRect.y);
+    var r = cont.scrollRect;
+    // TODO: bottom_aligned support?, +=h laster, -=h
+    if (_scrollbary) {
+      r.y += (cast(e).delta<0) ? 15 : -15;
+      if (r.y<0) r.y=0;
+      if (r.y>max_scroll_y()) r.y=max_scroll_y();
+    } else if (_scrollbarx) {
+      r.x += (cast(e).delta<0) ? 15 : -15;
+      if (r.x<0) r.x=0;
+      if (r.x>max_scroll_x()) r.x=max_scroll_x();
+    }
+    cont.scrollRect = r;
+    _scroll_invalid = true;
+  }
+
+  private function max_scroll_y():Float {
+    var rect = cont.scrollRect;
+    var bounds = cont.getBounds(cont);
+    return bounds.height-rect.height;
+  }
+
+  private function max_scroll_x():Float {
+    var rect = cont.scrollRect;
+    var bounds = cont.getBounds(cont);
+    return bounds.width-rect.width;
+  }
+
+  private function handle_enter_frame(e:Event):Void
+  {
+    if (!_scroll_invalid) return;
+
+    var rect = cont.scrollRect;
+    var bounds = cont.getBounds(cont);
+
+    scrollbars.graphics.clear();
+    if (_scrollbary && rect.height<bounds.height) {
+      scrollbars.graphics.beginFill(0xffffff,0.2);
+      scrollbars.graphics.drawRoundRect(rect.width+1,
+                                        PAD,
+                                        PAD,
+                                        rect.height,
+                                        PAD);
+      var pct = rect.height/bounds.height;
+      var scrollbar_h = (rect.height/10)*(1-pct) + (rect.height)*pct;
+      var scroll_pct = rect.y/(bounds.height-rect.height);
+      var scroll_y = (rect.height-scrollbar_h)*scroll_pct;
+      scrollbars.graphics.drawRoundRect(rect.width+1,
+                                        PAD+scroll_y,
+                                        PAD,
+                                        scrollbar_h,
+                                        PAD);
+    }
+    if (_scrollbarx && rect.width<bounds.width) {
+      scrollbars.graphics.beginFill(0xffffff,0.2);
+      scrollbars.graphics.drawRoundRect(PAD,
+                                        rect.height+1,
+                                        rect.width,
+                                        PAD,
+                                        PAD);
+      var pct = rect.width/bounds.width;
+      var scrollbar_w = (rect.width/10)*(1-pct) + (rect.width)*pct;
+      var scroll_pct = rect.x/(bounds.width-rect.width);
+      var scroll_x = (rect.width-scrollbar_w)*scroll_pct;
+      scrollbars.graphics.drawRoundRect(PAD+scroll_x,
+                                        rect.height+1,
+                                        scrollbar_w,
+                                        PAD,
+                                        PAD);
+    }
+
+    _scroll_invalid = false;
+  }
+
+
+  private function resize()
   {
     cont.scrollRect = new flash.geom.Rectangle(cont.scrollRect.x,
-                                               _bottom_aligned ? -(_height-2*PAD) : 0,
+                                               _bottom_aligned ? -(_height-2*PAD) : cont.scrollRect.y,
                                                _width-2*PAD,
                                                _height-2*PAD);
 
-    decor.graphics.clear();
-    decor.graphics.lineStyle(3, 0x111111);
+    backdrop.graphics.clear();
+    backdrop.graphics.lineStyle(3, 0x111111);
 
     TEMP_M.identity();
     TEMP_M.createGradientBox(_width,_height,Math.PI/180*(-90));
-    decor.graphics.beginGradientFill(openfl.display.GradientType.LINEAR,
+    backdrop.graphics.beginGradientFill(openfl.display.GradientType.LINEAR,
                                      [0x444444, 0x535353],
                                      [1, 1],
                                      [0,255],
                                      TEMP_M);
 
-    decor.graphics.drawRoundRect(0,0,_width,_height, 7);
+    backdrop.graphics.drawRoundRect(0,0,_width,_height, 7);
 
     // cont knockout
     var p:Float = PAD/2;
-    decor.graphics.lineStyle(0,0, 0);
-    decor.graphics.beginFill(0x000000, 0.25);
-    decor.graphics.drawRoundRect(p,p,_width-p*2,_height-p*2,5);
+    backdrop.graphics.lineStyle(0,0, 0);
+    backdrop.graphics.beginFill(0x000000, 0.25);
+    backdrop.graphics.drawRoundRect(p,p,_width-p*2,_height-p*2,5);
 
   }
 }

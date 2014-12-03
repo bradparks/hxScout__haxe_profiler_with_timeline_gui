@@ -10,6 +10,8 @@ import openfl.Assets;
 import motion.Actuate;
 
 class Util {
+  public static var stage:openfl.display.Stage;
+
   private static var fonts:StringMap<Font> = new StringMap<Font>();
 
   public static function make_label(text:String,

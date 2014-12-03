@@ -95,6 +95,7 @@ class Main extends Sprite {
   function setup_stage()
   {
     fps = new openfl.display.FPS(0,0,0xffffff);
+    fps.mouseEnabled = false;
     addChild(fps);
     center();
     stage.addEventListener(flash.events.Event.RESIZE, center);
@@ -211,6 +212,7 @@ class FLMSession {
   public var temp_running_mem:StringMap<Int>;
   public var name:String;
   public var stack_strings:Array<String> = ["1-indexed"];
+  public var ses_tile:Sprite;
 
   public function new(iid:String)
   {
@@ -321,11 +323,11 @@ class HXScoutClientGUI extends Sprite
     session_pane = new Pane(false, false, true); // scrolly
     detail_pane = new Pane(false, false, true);  // scrolly
 
+    addChild(session_pane);
     addChild(nav_pane);
     addChild(summary_pane);
     addChild(timing_pane);
     addChild(memory_pane);
-    addChild(session_pane);
     addChild(detail_pane);
 
     sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, detail_pane, summary_pane, layout, get_active_session);
@@ -393,12 +395,13 @@ class HXScoutClientGUI extends Sprite
   public function add_session(flm_session:FLMSession)
   {
     trace("GUI got new session: "+flm_session.inst_id);
+    var s:Sprite = flm_session.ses_tile = new Sprite();
+    s.alpha = 0.3;
     sessions.push(flm_session);
     if (active_session<0) {
       set_active_session(sessions.length-1);
     }
 
-    var s:Sprite = new Sprite();
     var m:flash.geom.Matrix = new flash.geom.Matrix();
     m.createGradientBox(session_pane.innerWidth,42,Math.PI/180*(-90));
     s.graphics.beginGradientFill(openfl.display.GradientType.LINEAR,
@@ -416,6 +419,11 @@ class HXScoutClientGUI extends Sprite
 
   public function set_active_session(n:Int)
   {
+    for (i in 0...sessions.length) {
+      sessions[i].ses_tile.alpha = i==n ? 1 : 0.3;
+      if (sessions[i].ses_tile.numChildren>0) sessions[i].ses_tile.getChildAt(0).alpha = 1;
+    }
+
     if (n>=sessions.length) return;
     active_session = n;
     last_frame_drawn = -1;
@@ -508,8 +516,8 @@ class HXScoutClientGUI extends Sprite
     }
 
     // scale nav cont to fit
-    if (last_frame_drawn*nav_scalex > nav_pane.innerWidth*0.99) {
-      var rescale = 0.95;
+    if (last_frame_drawn*nav_scalex > nav_pane.innerWidth*0.97) {
+      var rescale = 0.9;
       var bd:BitmapData = new BitmapData(2048, layout.nav.height, true, 0x0);
       var m = new flash.geom.Matrix();
       m.scale(rescale, 1);
@@ -886,12 +894,10 @@ class Pane extends Sprite {
     // TODO: bottom_aligned support?, +=h laster, -=h
     if (_scrollbary) {
       r.y += (cast(e).delta<0) ? 15 : -15;
-      if (r.y<0) r.y=0;
-      if (r.y>max_scroll_y()) r.y=max_scroll_y();
+      limit_scrolly(r);
     } else if (_scrollbarx) {
       r.x += (cast(e).delta<0) ? 15 : -15;
-      if (r.x<0) r.x=0;
-      if (r.x>max_scroll_x()) r.x=max_scroll_x();
+      limit_scrollx(r);
     }
     cont.scrollRect = r;
     _scroll_invalid = true;
@@ -900,13 +906,13 @@ class Pane extends Sprite {
   private function max_scroll_y():Float {
     var rect = cont.scrollRect;
     var bounds = cont.getBounds(cont);
-    return bounds.height-rect.height;
+    return Math.max(0, bounds.height-rect.height);
   }
 
   private function max_scroll_x():Float {
     var rect = cont.scrollRect;
     var bounds = cont.getBounds(cont);
-    return bounds.width-rect.width;
+    return Math.max(0, bounds.width-rect.width);
   }
 
   private function handle_enter_frame(e:Event):Void
@@ -955,13 +961,29 @@ class Pane extends Sprite {
     _scroll_invalid = false;
   }
 
+  private inline function limit_scrollx(r:flash.geom.Rectangle):Void
+  {
+    if (r.x<0) r.x=0;
+    if (r.x>max_scroll_x()) r.x=max_scroll_x();
+  }
+
+  private inline function limit_scrolly(r:flash.geom.Rectangle):Void
+  {
+    if (r.y<0) r.y=0;
+    if (r.y>max_scroll_y()) r.y=max_scroll_y();
+  }
 
   private function resize()
   {
-    cont.scrollRect = new flash.geom.Rectangle(cont.scrollRect.x,
-                                               _bottom_aligned ? -(_height-2*PAD) : cont.scrollRect.y,
-                                               _width-2*PAD,
-                                               _height-2*PAD);
+    var r = new flash.geom.Rectangle(cont.scrollRect.x,
+                                     _bottom_aligned ? -(_height-2*PAD) : cont.scrollRect.y,
+                                     _width-2*PAD,
+                                     _height-2*PAD);
+
+    // Ensure scroll stays in bounds during resize
+    if (_scrollbarx) limit_scrollx(r);
+    if (_scrollbary) limit_scrolly(r);
+    cont.scrollRect = r;
 
     backdrop.graphics.clear();
     backdrop.graphics.lineStyle(3, 0x111111);

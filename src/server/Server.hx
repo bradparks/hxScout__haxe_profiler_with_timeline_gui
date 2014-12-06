@@ -238,6 +238,13 @@ class FLMListener {
         }
 
         // - - - - - - - - - - - -
+        // CPU
+        // - - - - - - - - - - - -
+        if (name.indexOf(".player.cpu")==0) {
+          cur_frame.cpu = data["value"];
+        }
+
+        // - - - - - - - - - - - -
         // Sampler
         // - - - - - - - - - - - -
         if (name.indexOf(".sampler.")==0) {
@@ -292,6 +299,7 @@ class Frame {
   public var mem:Map<String, Int>;
   public var samples:Array<Dynamic>;
   public var push_stack_strings:Array<String>;
+  public var cpu:Float;
   //public var events:Array<Dynamic>;
 #if DEBUG_UNKNOWN
   public var unknown_names:Array<String>;
@@ -314,6 +322,7 @@ class Frame {
     mem = new Map<String, Int>();
     samples = null;
     push_stack_strings = null;
+    cpu = 0;
 #if DEBUG_UNKNOWN
     unknown_names = [];
 #end
@@ -331,6 +340,7 @@ class Frame {
       duration:duration,
       push_stack_strings:push_stack_strings,
       samples:samples,
+      cpu:cpu,
       mem:mem
     });
   }

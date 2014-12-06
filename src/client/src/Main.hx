@@ -766,11 +766,6 @@ class SelectionController {
     // - - - - - - - - - - -
     // - - Summary pane - -
     // - - - - - - - - - -
-    var lbl = Util.make_label("Framerate", 12, 0x777777, -1, "DroidSans-Bold.ttf");
-    lbl.y = 5;
-    lbl.x = 10;
-    summary_pane.cont.addChild(lbl);
-
     var total = 0;
     var active = 0;
     var durations = new StringMap<Int>();
@@ -796,40 +791,65 @@ class SelectionController {
       }
     });
 
+    // Please forgive my utter disregard for any sane variable
+    // naming and reuse convention, bwa ha ha!
+    var lbl = Util.make_label("Framerate", 12, 0x777777, -1, "DroidSans-Bold.ttf");
+    lbl.y = 5;
+    lbl.x = 10;
+    summary_pane.cont.addChild(lbl);
+
     var unit:Int = Math.floor(num_frames*1000000/total);
     var dec:Int = Math.floor(num_frames*10000000/total)-10*unit;
+
     var fps = Util.make_label((unit+"."+dec+" fps"), 18, 0xeeeeee);
-    fps.y = lbl.height;
+    fps.y = lbl.y + 18 - 4;
     fps.x = 10;
     summary_pane.cont.addChild(fps);
 
-    // Please forgive my utter disregard for any sane variable
-    // naming and reuse convention, bwa ha ha!
+    var tgtlbl = Util.make_label("Target", 12, 0x777777, -1, "DroidSans-Bold.ttf");
+    tgtlbl.y = lbl.y + 18*2;
+    tgtlbl.x = 10;
+    summary_pane.cont.addChild(tgtlbl);
+
+    var tgtval = Util.make_label("--", 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
+    tgtval.y = tgtlbl.y;
+    tgtval.x = tgtlbl.x + 55;
+    summary_pane.cont.addChild(tgtval);
+
     var flbl = Util.make_label("Frame"+(start==end?"":"s"), 12, 0x777777, -1, "DroidSans-Bold.ttf");
     flbl.y = 5;
     flbl.x = lbl.x + lbl.width*1.3;
     summary_pane.cont.addChild(flbl);
 
+    var ftxt = Util.make_label(start+(start==end?"":" - "+end), 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
+    ftxt.y = 5;
+    ftxt.x = flbl.x + 55;
+    summary_pane.cont.addChild(ftxt);
+
     var tlbl = Util.make_label("Time", 12, 0x777777, -1, "DroidSans-Bold.ttf");
-    tlbl.y = fps.y + fps.height - tlbl.height;
+    tlbl.y = lbl.y + 18;
     tlbl.x = lbl.x + lbl.width*1.3;
     summary_pane.cont.addChild(tlbl);
 
-    var ftxt = Util.make_label(start+(start==end?"":" - "+end), 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
-    ftxt.y = 5;
-    ftxt.x = flbl.x + tlbl.width*1.45;
-    summary_pane.cont.addChild(ftxt);
-
     var t = Util.time_format(frame.offset)+" - "+Util.time_format(end_frame.offset+end_frame.duration.total);
-
     var ttxt = Util.make_label(t, 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
     ttxt.y = tlbl.y;
     ttxt.x = ftxt.x;
     summary_pane.cont.addChild(ttxt);
 
+    var cpulbl = Util.make_label("CPU", 12, 0x777777, -1, "DroidSans-Bold.ttf");
+    cpulbl.y = lbl.y + 18*2;
+    cpulbl.x = lbl.x + lbl.width*1.3;
+    summary_pane.cont.addChild(cpulbl);
+
+    var ctxt = Util.make_label((Math.floor(1000*frame.cpu)/10)+" %", 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
+    ctxt.y = cpulbl.y;
+    ctxt.x = ftxt.x;
+    summary_pane.cont.addChild(ctxt);
+
     // Timing summary
     var ttlbl = Util.make_label("Total Frame Time", 12, 0x777777);
-    ttlbl.y = fps.y + fps.height + tlbl.height;
+    ttlbl.y = lbl.y + 18*4;
     ttlbl.x = 10;
     summary_pane.cont.addChild(ttlbl);
 

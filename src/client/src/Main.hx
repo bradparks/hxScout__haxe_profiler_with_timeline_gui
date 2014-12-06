@@ -327,11 +327,11 @@ class HXScoutClientGUI extends Sprite
     detail_pane = new Pane();
 
     sample_pane = new Pane(false, false, true);  // scrolly
-    sample_pane.outline = 1;
+    sample_pane.outline = 2;
     sample_pane.outline_alpha = 0.75;
 
     alloc_pane = new Pane(false, false, true);  // scrolly
-    alloc_pane.outline = 1;
+    alloc_pane.outline = 2;
     alloc_pane.outline_alpha = 0.75;
 
     addChild(session_pane);
@@ -1022,26 +1022,43 @@ class DetailUI {
 
     var profiler = Util.make_label("Profiler Samples", 12);
     profiler.filters = [Util.TEXT_SHADOW];
+    profiler.mouseEnabled = false;
     var p = new Sprite();
-    p.graphics.beginFill(0xff0000);
     Util.gray_gradient(p.graphics, profiler.width*1.4, profiler.height);
+    p.graphics.lineStyle(1, 0x555555);
     p.graphics.drawRect(0,0,profiler.width*1.4, profiler.height);
     profiler.x = profiler.width*0.2;
     p.addChild(profiler);
     detail_pane.cont.addChild(p);
 
     var alloc = Util.make_label("Memory Allocations", 12);
+    alloc.filters = [Util.TEXT_SHADOW];
+    alloc.mouseEnabled = false;
     var a = new Sprite();
-    a.graphics.beginFill(0xff0000);
     Util.gray_gradient(a.graphics, alloc.width*1.4, alloc.height);
+    a.graphics.lineStyle(1, 0x555555);
     a.graphics.drawRect(0,0,alloc.width*1.4, alloc.height);
     alloc.x = alloc.width*0.2;
     a.addChild(alloc);
     a.x = p.x+p.width+5;
     detail_pane.cont.addChild(a);
 
-    p.transform.colorTransform = new openfl.geom.ColorTransform(1,1.02,1.04,1,10,10,10);
-    a.transform.colorTransform = new openfl.geom.ColorTransform(0.97,0.97,0.97,1,-20,-20,-20);
+    function select(tgt:Sprite):Void
+    {
+      var highlight_on = new openfl.geom.ColorTransform(1,1.02,1.04,1,10,10,10);
+      var highlight_off = new openfl.geom.ColorTransform(0.97,0.97,0.97,1,-20,-20,-20);
+
+      p.transform.colorTransform = tgt==p ? highlight_on : highlight_off;
+      a.transform.colorTransform = tgt==a ? highlight_on : highlight_off;
+      sample_pane.visible = tgt==p;
+      alloc_pane.visible = tgt==a;
+      profiler.alpha = alloc.alpha = 1; // openfl bug /w set colortransform / cached textfields?
+    }
+    function handle_click(e:Event):Void { select(e.target); }
+    AEL.add(p, MouseEvent.CLICK, handle_click);
+    AEL.add(a, MouseEvent.CLICK, handle_click);
+    select(p);
+
   }
 }
 

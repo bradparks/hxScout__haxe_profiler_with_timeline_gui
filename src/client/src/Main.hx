@@ -304,6 +304,8 @@ class HXScoutClientGUI extends Sprite
   private var memory_pane:Pane;
   private var session_pane:Pane;
   private var detail_pane:Pane;
+  private var sample_pane:Pane;
+  private var alloc_pane:Pane;
 
   private var active_session = -1;
   private var last_frame_drawn = -1;
@@ -311,6 +313,7 @@ class HXScoutClientGUI extends Sprite
 
   private var nav_ctrl:NavController;
   private var sel_ctrl:SelectionController;
+  private var detail_ui:DetailUI;
 
   public function new()
   {
@@ -321,7 +324,15 @@ class HXScoutClientGUI extends Sprite
     timing_pane = new Pane(true);
     memory_pane = new Pane(true);
     session_pane = new Pane(false, false, true); // scrolly
-    detail_pane = new Pane(false, false, true);  // scrolly
+    detail_pane = new Pane();
+
+    sample_pane = new Pane(false, false, true);  // scrolly
+    sample_pane.outline = 1;
+    sample_pane.outline_alpha = 0.75;
+
+    alloc_pane = new Pane(false, false, true);  // scrolly
+    alloc_pane.outline = 1;
+    alloc_pane.outline_alpha = 0.75;
 
     addChild(session_pane);
     addChild(nav_pane);
@@ -329,9 +340,12 @@ class HXScoutClientGUI extends Sprite
     addChild(timing_pane);
     addChild(memory_pane);
     addChild(detail_pane);
+    detail_pane.cont.addChild(alloc_pane);
+    detail_pane.cont.addChild(sample_pane);
 
-    sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, detail_pane, summary_pane, layout, get_active_session);
+    sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, sample_pane, summary_pane, layout, get_active_session);
     nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane, sel_ctrl, function() { return layout.frame_width/nav_scalex; });
+    detail_ui = new DetailUI(detail_pane, sample_pane, alloc_pane);
 
     addEventListener(Event.ENTER_FRAME, on_enter_frame);
   }
@@ -368,6 +382,8 @@ class HXScoutClientGUI extends Sprite
     resize_pane(w, h, memory_pane,  layout.session.width, y, w-(layout.session.width+layout.summary.width), layout.timing.height);
     y += layout.timing.height;
     resize_pane(w, h, detail_pane,  layout.session.width, y, w-(layout.session.width), h-y);
+    resize_pane(0, 0, sample_pane,  0, 20, detail_pane.innerWidth, detail_pane.innerHeight-20);
+    resize_pane(0, 0, alloc_pane,  0, 20, detail_pane.innerWidth, detail_pane.innerHeight-20);
 
     if (stage!=null) sel_ctrl.redraw();
   }
@@ -384,7 +400,7 @@ class HXScoutClientGUI extends Sprite
   {
     trace("Set name: "+inst_id+", "+name);
     var lbl = Util.make_label(name, 15);
-    lbl.filters = [new flash.filters.DropShadowFilter(1, 120, 0x0, 0.8, 3, 3, 1, 2)];
+    lbl.filters = [Util.TEXT_SHADOW];
     var ses:Sprite = cast(session_pane.cont.getChildAt(Std.parseInt(inst_id)));
     lbl.y = ses.height/2-lbl.height/2;
     lbl.x = 4;
@@ -401,13 +417,7 @@ class HXScoutClientGUI extends Sprite
       set_active_session(sessions.length-1);
     }
 
-    var m:flash.geom.Matrix = new flash.geom.Matrix();
-    m.createGradientBox(session_pane.innerWidth,42,Math.PI/180*(-90));
-    s.graphics.beginGradientFill(openfl.display.GradientType.LINEAR,
-                                 [0x444444, 0x535353],
-                                 [1, 1],
-                                 [0,255],
-                                 m);
+    Util.gray_gradient(s.graphics, session_pane.innerWidth, 42);
     s.graphics.lineStyle(2, 0x555555);
     s.graphics.drawRect(0,0,session_pane.innerWidth,42);
     s.buttonMode = true;
@@ -437,9 +447,9 @@ class HXScoutClientGUI extends Sprite
     while (timing_pane.cont.numChildren>0) timing_pane.cont.removeChildAt(0);
     timing_pane.cont.graphics.clear();
     while (memory_pane.cont.numChildren>0) memory_pane.cont.removeChildAt(0);
-    while (detail_pane.cont.numChildren>0) detail_pane.cont.removeChildAt(0);
+    while (sample_pane.cont.numChildren>0) sample_pane.cont.removeChildAt(0);
     while (summary_pane.cont.numChildren>0) summary_pane.cont.removeChildAt(0);
-    detail_pane.cont.graphics.clear();
+    sample_pane.cont.graphics.clear();
 
     timing_shapes = [];
     memory_shapes = [];
@@ -633,7 +643,7 @@ class SelectionController {
   private var nav_pane:Pane;
   private var timing_pane:Pane;
   private var memory_pane:Pane;
-  private var detail_pane:Pane;
+  private var sample_pane:Pane;
   private var summary_pane:Pane;
   private var layout:Dynamic;
   private var get_active_session:Void->FLMSession;
@@ -642,13 +652,13 @@ class SelectionController {
   public var start_sel:Int;
   public var end_sel:Int;
 
-  public function new (nav_pane, timing_pane, memory_pane, detail_pane, summary_pane, layout,
+  public function new (nav_pane, timing_pane, memory_pane, sample_pane, summary_pane, layout,
                        get_active_session):Void
   {
     this.nav_pane = nav_pane;
     this.timing_pane = timing_pane;
     this.memory_pane = memory_pane;
-    this.detail_pane = detail_pane;
+    this.sample_pane = sample_pane;
     this.summary_pane = summary_pane;
     this.layout = layout;
     this.get_active_session = get_active_session;
@@ -728,9 +738,9 @@ class SelectionController {
     var end = Std.int(Math.max(start_sel, end_sel));
 
     selection.graphics.clear();
-    while (detail_pane.cont.numChildren>0) detail_pane.cont.removeChildAt(0);
+    while (sample_pane.cont.numChildren>0) sample_pane.cont.removeChildAt(0);
     while (summary_pane.cont.numChildren>0) summary_pane.cont.removeChildAt(0);
-    detail_pane.cont.graphics.clear();
+    sample_pane.cont.graphics.clear();
     summary_pane.cont.graphics.clear();
 
     var session:FLMSession = get_active_session();
@@ -952,27 +962,27 @@ class SelectionController {
         var lbl = Util.make_label(session.stack_strings[i], 12, 0x66aadd);
         lbl.y = y;
         lbl.x = indent*15;
-        detail_pane.cont.addChild(lbl);
+        sample_pane.cont.addChild(lbl);
 
         ping = !ping;
         if (ping) {
-          detail_pane.cont.graphics.beginFill(0xffffff, 0.02);
-          detail_pane.cont.graphics.drawRect(0,y,detail_pane.innerWidth,lbl.height);
+          sample_pane.cont.graphics.beginFill(0xffffff, 0.02);
+          sample_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,lbl.height);
         }
 
         // I'd use round, but Scout seems to use floor
         var pct = Math.max(0, Math.min(100, Math.floor(100*sample.total_time/total)))+"%";
-        var x:Float = detail_pane.innerWidth - 20;
+        var x:Float = sample_pane.innerWidth - 20;
         lbl = Util.make_label(pct, 12, 0xeeeeee);
         lbl.y = y;
         lbl.x = x - lbl.width;
-        detail_pane.cont.addChild(lbl);
+        sample_pane.cont.addChild(lbl);
         x -= 60;
 
         lbl = Util.make_label(cast(sample.total_time), 12, 0xeeeeee);
         lbl.y = y;
         lbl.x = x - lbl.width;
-        detail_pane.cont.addChild(lbl);
+        sample_pane.cont.addChild(lbl);
         x -= 80;
 
         // I'd use round, but Scout seems to use floor
@@ -980,13 +990,13 @@ class SelectionController {
         lbl = Util.make_label(pct, 12, 0xeeeeee);
         lbl.y = y;
         lbl.x = x - lbl.width;
-        detail_pane.cont.addChild(lbl);
+        sample_pane.cont.addChild(lbl);
         x -= 60;
 
         lbl = Util.make_label(cast(sample.self_time), 12, 0xeeeeee);
         lbl.y = y;
         lbl.x = x - lbl.width;
-        detail_pane.cont.addChild(lbl);
+        sample_pane.cont.addChild(lbl);
 
         y += lbl.height;
         display_samples(sample, indent+1);
@@ -996,9 +1006,50 @@ class SelectionController {
   }
 }
 
+class DetailUI {
+  private var detail_pane:Pane;
+  private var sample_pane:Pane;
+  private var alloc_pane:Pane;
+  private var sel_ctrl:SelectionController;
+  private var get_detail_factor:Void->Float;
+
+  public function new (detail_pane, sample_pane, alloc_pane):Void
+  {
+    this.detail_pane = detail_pane;
+    this.sample_pane = sample_pane;
+    this.alloc_pane = alloc_pane;
+
+
+    var profiler = Util.make_label("Profiler Samples", 12);
+    profiler.filters = [Util.TEXT_SHADOW];
+    var p = new Sprite();
+    p.graphics.beginFill(0xff0000);
+    Util.gray_gradient(p.graphics, profiler.width*1.4, profiler.height);
+    p.graphics.drawRect(0,0,profiler.width*1.4, profiler.height);
+    profiler.x = profiler.width*0.2;
+    p.addChild(profiler);
+    detail_pane.cont.addChild(p);
+
+    var alloc = Util.make_label("Memory Allocations", 12);
+    var a = new Sprite();
+    a.graphics.beginFill(0xff0000);
+    Util.gray_gradient(a.graphics, alloc.width*1.4, alloc.height);
+    a.graphics.drawRect(0,0,alloc.width*1.4, alloc.height);
+    alloc.x = alloc.width*0.2;
+    a.addChild(alloc);
+    a.x = p.x+p.width+5;
+    detail_pane.cont.addChild(a);
+
+    p.transform.colorTransform = new openfl.geom.ColorTransform(1,1.02,1.04,1,10,10,10);
+    a.transform.colorTransform = new openfl.geom.ColorTransform(0.97,0.97,0.97,1,-20,-20,-20);
+  }
+}
+
 class Pane extends Sprite {
 
-  public static inline var PAD:Float = 6;
+  public var PAD:Float = 6;
+  public var outline:Float = 3;
+  public var outline_alpha:Float = 1;
 
   public var cont(get, null):Sprite;
   var backdrop:Shape;
@@ -1048,8 +1099,6 @@ class Pane extends Sprite {
   public var innerHeight(get, null):Float;
   public function get_innerWidth():Float { return _width-2*PAD; }
   public function get_innerHeight():Float { return _height-2*PAD; }
-
-  static var TEMP_M:flash.geom.Matrix = new flash.geom.Matrix();
 
   public function get_cont():Sprite {
     _scroll_invalid = true;
@@ -1161,20 +1210,13 @@ class Pane extends Sprite {
     cont.scrollRect = r;
 
     backdrop.graphics.clear();
-    backdrop.graphics.lineStyle(3, 0x111111);
+    backdrop.graphics.lineStyle(outline, 0x111111, outline_alpha);
 
-    TEMP_M.identity();
-    TEMP_M.createGradientBox(_width,_height,Math.PI/180*(-90));
-    backdrop.graphics.beginGradientFill(openfl.display.GradientType.LINEAR,
-                                     [0x444444, 0x535353],
-                                     [1, 1],
-                                     [0,255],
-                                     TEMP_M);
-
+    Util.gray_gradient(backdrop.graphics, _width, _height);
     backdrop.graphics.drawRoundRect(0,0,_width,_height, 7);
 
     // cont knockout
-    var p:Float = PAD/2;
+    var p:Float = outline;
     backdrop.graphics.lineStyle(0,0, 0);
     backdrop.graphics.beginFill(0x000000, 0.25);
     backdrop.graphics.drawRoundRect(p,p,_width-p*2,_height-p*2,5);

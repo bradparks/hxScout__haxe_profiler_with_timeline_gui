@@ -4,6 +4,7 @@ import sys.net.Socket;
 import amf.io.Amf3Reader;
 import cpp.vm.Thread;
 import haxe.io.*;
+import haxe.ds.StringMap;
 
 typedef Timing = {
   var delta:Int;
@@ -158,6 +159,22 @@ class FLMListener {
         //trace(data);
         var name:String = cast(data['name'], String);
 
+        //if (name.indexOf('::')>0) {
+        //  //trace(data);
+        //  //trace(" -- Stack:");
+        //  //trace(data['name']);
+        //  //trace(Type.getClass(data['name']));
+        //  //trace(Reflect.fields(data['name']));
+        // 
+        //  var bytes = haxe.io.Bytes.ofString(data["name"]);
+        //  var msg = "";
+        //  for (i in 0...bytes.length) {
+        //    var b = bytes.get(i);
+        //    if (b>=32 && b<=126) msg += String.fromCharCode(b); else msg += "%"+StringTools.hex(b, 2);
+        //  }
+        //  trace(msg);
+        //}
+
         if (name=='.swf.name') {
           client_writer.sendMessage(haxe.Json.stringify({session_name:data['value'], inst_id:inst_id}));
         }
@@ -229,7 +246,7 @@ class FLMListener {
         }
 
         // - - - - - - - - - - - -
-        // Memory
+        // Memory summary
         // - - - - - - - - - - - -
         if (name.indexOf(".mem.")==0 && data["value"]!=null) {
           var type:String = name.substr(5);
@@ -242,6 +259,17 @@ class FLMListener {
         // - - - - - - - - - - - -
         if (name.indexOf(".player.cpu")==0) {
           cur_frame.cpu = data["value"];
+        }
+
+        // - - - - - - - - - - - -
+        // Object allocations
+        // - - - - - - - - - - - -
+        if (name.indexOf(".memory.")==0) {
+          var type:String = name.substr(8);
+          //if (cur_frame.mem[type]==null) cur_frame.mem[type] = 0;
+          if (!cur_frame.alloc.exists(type)) cur_frame.alloc.set(type, new Array<Dynamic>());
+          cur_frame.alloc.get(type).push(data["value"]);
+          //if (type!="stackIdMap") trace("Pushed["+type+"]: "+data["value"]);
         }
 
         // - - - - - - - - - - - -
@@ -261,7 +289,7 @@ class FLMListener {
                 start = i+1;
               }
             }
-            //trace("Stack strings now: "+stack_strings.length);
+            //trace("Frame "+cur_frame.inst_id+", Stack strings now: "+stack_strings.length);
             //for (i in 0...stack_strings.length) {
             //  trace(i+": "+stack_strings[i]);
             //}
@@ -300,6 +328,7 @@ class Frame {
   public var samples:Array<Dynamic>;
   public var push_stack_strings:Array<String>;
   public var cpu:Float;
+  public var alloc:StringMap<Array<Dynamic>>;
   //public var events:Array<Dynamic>;
 #if DEBUG_UNKNOWN
   public var unknown_names:Array<String>;
@@ -323,6 +352,7 @@ class Frame {
     samples = null;
     push_stack_strings = null;
     cpu = 0;
+    alloc = new StringMap<Array<Dynamic>>();
 #if DEBUG_UNKNOWN
     unknown_names = [];
 #end
@@ -340,6 +370,7 @@ class Frame {
       duration:duration,
       push_stack_strings:push_stack_strings,
       samples:samples,
+      alloc:alloc,
       cpu:cpu,
       mem:mem
     });

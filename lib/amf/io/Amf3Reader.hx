@@ -114,8 +114,16 @@ class Amf3Reader {
 			}
 		}
 
-    //trace(" -- reading String: "+result);
-		
+    //if (result.indexOf(String.fromCharCode(0))>=0) {
+    //  var bytes = haxe.io.Bytes.ofString(result);
+		//  var msg = "";
+		//  for (i in 0...bytes.length) {
+		//  	var b = bytes.get(i);
+		//  	if (b>=32 && b<=126) msg += String.fromCharCode(b); else msg += "%"+StringTools.hex(b, 2);
+		//  }
+    //  trace(" -- reading NTString: "+msg);
+		//}
+
 		return result;
 	}
 
@@ -300,7 +308,7 @@ class Amf3Reader {
         var attribute_count = class_type >> 3;
         var class_name = readAmf3String();
 
-        //trace(" -- read class name: "+class_name+" with attrib count "+attribute_count);
+        //trace(" -- read "+(externalizable?'':'non-')+"externalizable class name: "+class_name+" with attrib count "+attribute_count);
 
         var class_attributes = [];
         for (i in 0...attribute_count) { class_attributes.push(readAmf3String()); } // Read class members

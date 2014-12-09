@@ -343,7 +343,7 @@ class HXScoutClientGUI extends Sprite
     detail_pane.cont.addChild(alloc_pane);
     detail_pane.cont.addChild(sample_pane);
 
-    sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, sample_pane, summary_pane, layout, get_active_session);
+    sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, summary_pane, layout, get_active_session);
     nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane, sel_ctrl, function() { return layout.frame_width/nav_scalex; });
     detail_ui = new DetailUI(detail_pane, sample_pane, alloc_pane);
 
@@ -644,6 +644,7 @@ class SelectionController {
   private var timing_pane:Pane;
   private var memory_pane:Pane;
   private var sample_pane:Pane;
+  private var alloc_pane:Pane;
   private var summary_pane:Pane;
   private var layout:Dynamic;
   private var get_active_session:Void->FLMSession;
@@ -652,13 +653,14 @@ class SelectionController {
   public var start_sel:Int;
   public var end_sel:Int;
 
-  public function new (nav_pane, timing_pane, memory_pane, sample_pane, summary_pane, layout,
+  public function new (nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, summary_pane, layout,
                        get_active_session):Void
   {
     this.nav_pane = nav_pane;
     this.timing_pane = timing_pane;
     this.memory_pane = memory_pane;
     this.sample_pane = sample_pane;
+    this.alloc_pane = alloc_pane;
     this.summary_pane = summary_pane;
     this.layout = layout;
     this.get_active_session = get_active_session;
@@ -739,8 +741,10 @@ class SelectionController {
 
     selection.graphics.clear();
     while (sample_pane.cont.numChildren>0) sample_pane.cont.removeChildAt(0);
-    while (summary_pane.cont.numChildren>0) summary_pane.cont.removeChildAt(0);
     sample_pane.cont.graphics.clear();
+    while (alloc_pane.cont.numChildren>0) alloc_pane.cont.removeChildAt(0);
+    alloc_pane.cont.graphics.clear();
+    while (summary_pane.cont.numChildren>0) summary_pane.cont.removeChildAt(0);
     summary_pane.cont.graphics.clear();
 
     var session:FLMSession = get_active_session();
@@ -942,7 +946,7 @@ class SelectionController {
     }
 
     // - - - - - - - - - - - - - - -
-    // - - Detail / Samples pane - -
+    // - - Samples pane - -
     // - - - - - - - - - - - - - - -
     var top_down = new SampleData();
     var total:Float = 0;
@@ -1003,6 +1007,61 @@ class SelectionController {
       }
     }
     display_samples(top_down);
+
+
+    // - - - - - - - - - - - - - - -
+    // - - Alloc pane - -
+    // - - - - - - - - - - - - - - -
+    var allocs:StringMap<Int> = new StringMap<Int>();
+    each_frame(function(f) {
+      var news:Array<Dynamic> = f.alloc!=null ? f.alloc.newObject : null;
+      if (news!=null) {
+        for (i in 0...news.length) {
+          var item = news[i];
+          if (!allocs.exists(item.type)) allocs.set(item.type, 0);
+          allocs.set(item.type, allocs.get(item.type)+item.size);
+
+          trace(item);
+          var i:Int = item.stackid;
+          var stack = session.stack_strings[i-1];
+          while (session.stack_strings[i].indexOf('global')<0) {
+            stack += ", "+session.stack_strings[i];
+            i++;
+          }
+          trace(item.type+": "+stack);
+
+          //trace(session.stack_strings.length);
+          //trace(session.stack_strings[item.stackid]);
+          //trace(session.stack_strings[item.stackid+1]);
+          //trace(session.stack_strings[item.stackid+2]);
+        }
+      }
+    });
+
+    //trace(allocs);
+    var y:Float = 0;
+    for (type in allocs.keys()) {
+      var lbl = Util.make_label(type, 12, 0x66aadd);
+      lbl.y = y;
+      lbl.x = 15;
+      alloc_pane.cont.addChild(lbl);
+
+      var val = allocs.get(type);
+      var suffix = val>8192 ? 'KB' : 'B';
+      val = val>8192 ? Math.floor(val/1024) : val;
+      var size = Util.make_label(Util.add_commas(val), 12, 0xeeeeee);
+      size.y = y;
+      size.x = alloc_pane.innerWidth-150-size.width;
+      alloc_pane.cont.addChild(size);
+
+      var suf = Util.make_label(suffix, 12, 0xeeeeee);
+      suf.y = size.y;
+      suf.x = alloc_pane.innerWidth - 150 + 5;
+      alloc_pane.cont.addChild(suf);
+
+      y += lbl.height;
+    }
+
   }
 }
 

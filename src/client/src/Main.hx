@@ -433,7 +433,11 @@ class HXScoutClientGUI extends Sprite
 
     if (active_session>=0) { // save current nav/sel
       var session:FLMSession = sessions[active_session];
-      session.last_nav_sel = [Std.int(timing_pane.cont.scrollRect.x), sel_ctrl.start_sel, sel_ctrl.end_sel];
+      session.last_nav_sel = [Std.int(timing_pane.cont.scrollRect.x),
+                              Std.int(1000*nav_ctrl.timing_scaley),
+                              Std.int(1000*nav_ctrl.memory_scaley),
+                              sel_ctrl.start_sel,
+                              sel_ctrl.end_sel];
     }
 
     for (i in 0...sessions.length) {
@@ -463,15 +467,17 @@ class HXScoutClientGUI extends Sprite
     session.temp_running_mem = new StringMap<Int>();
 
     // Restore nav/sel
-    if (session.last_nav_sel==null) session.last_nav_sel = [0, -1, -1];
+    if (session.last_nav_sel==null) session.last_nav_sel = [0, 1000, 1000, -1, -1];
     var r = timing_pane.cont.scrollRect;
     r.x = session.last_nav_sel[0];
     timing_pane.cont.scrollRect = r;
     var r = memory_pane.cont.scrollRect;
     r.x = session.last_nav_sel[0];
     memory_pane.cont.scrollRect = r;
-    sel_ctrl.start_sel = session.last_nav_sel[1];
-    sel_ctrl.end_sel = session.last_nav_sel[2];
+    nav_ctrl.timing_scaley = session.last_nav_sel[1]/1000.0;
+    nav_ctrl.memory_scaley = session.last_nav_sel[2]/1000.0;
+    sel_ctrl.start_sel = session.last_nav_sel[3];
+    sel_ctrl.end_sel = session.last_nav_sel[4];
     sel_ctrl.redraw();
   }
 
@@ -550,8 +556,14 @@ class HXScoutClientGUI extends Sprite
     var i0 = Math.floor((timing_pane.cont.scrollRect.x)/(16*layout.frame_width));
     for (offset in 0...Math.ceil(timing_pane.innerWidth/(layout.frame_width*16))+1) {
       i = offset + i0;
-      if (i>=0 && i<timing_shapes.length) timing_pane.cont.addChild(timing_shapes[i]);
-      if (i>=0 && i<memory_shapes.length) memory_pane.cont.addChild(memory_shapes[i]);
+      if (i>=0 && i<timing_shapes.length) {
+        timing_pane.cont.addChild(timing_shapes[i]);
+        timing_shapes[i].scaleY = nav_ctrl.timing_scaley;
+      }
+      if (i>=0 && i<memory_shapes.length) {
+        memory_pane.cont.addChild(memory_shapes[i]);
+        memory_shapes[i].scaleY = nav_ctrl.memory_scaley;
+      }
     }
 
     // scale nav cont to fit
@@ -579,6 +591,8 @@ class HXScoutClientGUI extends Sprite
     while (arr.length<=idx) arr.push(new Shape());
     var s:Shape = arr[idx];
 
+    s.scaleY = pane==timing_pane ? nav_ctrl.timing_scaley : nav_ctrl.memory_scaley;
+
     s.graphics.beginFill(color);
     s.graphics.drawRect(id*layout.frame_width,-value-stack_y,layout.frame_width-1,value);
     s.graphics.endFill();
@@ -594,6 +608,9 @@ class NavController {
   private var sel_ctrl:SelectionController;
   private var get_nav_factor:Void->Float;
 
+  public var timing_scaley:Float = 1.0;
+  public var memory_scaley:Float = 1.0;
+
   public function new (nav_pane, timing_pane, memory_pane, sel_ctrl, get_nav_factor):Void
   {
     this.nav_pane = nav_pane;
@@ -603,6 +620,27 @@ class NavController {
     this.get_nav_factor = get_nav_factor;
 
     AEL.add(nav_pane, MouseEvent.MOUSE_DOWN, handle_nav_start);
+
+    AEL.add(timing_pane, MouseEvent.MOUSE_WHEEL, handle_zoom);
+    AEL.add(memory_pane, MouseEvent.MOUSE_WHEEL, handle_zoom);
+  }
+
+  private function handle_zoom(e:Event):Void {
+    // Do it this way because selection graphic is part of memory pane, so
+    // e.target doesn't work.
+    var p = new flash.geom.Point(timing_pane.stage.mouseX, timing_pane.stage.mouseY);
+    var tp = timing_pane.globalToLocal(p);
+    var pane = (tp.y>0 && tp.y<timing_pane.height) ? timing_pane : memory_pane;
+
+    var shrink = cast(e).delta<0;
+
+    if (pane==timing_pane) timing_scaley *= shrink ? 0.8 : 1.2;
+    if (pane==memory_pane) memory_scaley *= shrink ? 0.8 : 1.2;
+
+    var i = -1;
+    while (++i < pane.cont.numChildren) {
+      pane.cont.getChildAt(i).scaleY = (pane==timing_pane) ? timing_scaley : memory_scaley;
+    }
   }
 
   function handle_nav_start(e:Event)

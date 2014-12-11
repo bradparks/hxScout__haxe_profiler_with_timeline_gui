@@ -705,11 +705,27 @@ class SelectionController {
 
     AEL.add(timing_pane, MouseEvent.MOUSE_DOWN, handle_select_start);
     AEL.add(memory_pane, MouseEvent.MOUSE_DOWN, handle_select_start);
+    AEL.add(Util.stage, KeyboardEvent.KEY_DOWN, handle_key);
 
     selection = new Shape();
     memory_pane.addChild(selection);
 
     Util.stage.addEventListener(Event.ENTER_FRAME, handle_enter_frame);
+  }
+
+  function handle_key(ev:Event)
+  {
+    var e = cast(ev, KeyboardEvent);
+    trace(e.keyCode);
+    if (e.keyCode==39) { // right
+      if (!e.shiftKey) start_sel++;
+      end_sel++;
+      redraw();
+    } else if (e.keyCode==37) {
+      if (!e.shiftKey) start_sel--;
+      end_sel--;
+      redraw();
+    }
   }
 
   function handle_select_start(e:Event)
@@ -738,10 +754,15 @@ class SelectionController {
     if (start_selection) start_sel = num;
     end_sel = num;
 
+    var r = sample_pane.cont.scrollRect; r.y = 0;
+    sample_pane.cont.scrollRect = r;
+    var r = alloc_pane.cont.scrollRect; r.y = 0;
+    alloc_pane.cont.scrollRect = r;
+
     redraw();
   }
 
-  // Others seen:
+  // Others mem keys seen:
   // - bytearray.alchemy
   // - bitmap.image
   // - network
@@ -1078,6 +1099,7 @@ class SelectionController {
 
     //trace(allocs);
     var y:Float = 0;
+    var ping = true;
     for (type in allocs.keys()) {
       var lbl = Util.make_label(type, 12, 0x66aadd);
       lbl.y = y;
@@ -1096,6 +1118,12 @@ class SelectionController {
       suf.y = size.y;
       suf.x = alloc_pane.innerWidth - 150 + 5;
       alloc_pane.cont.addChild(suf);
+
+      ping = !ping;
+      if (ping) {
+        alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
+        alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,lbl.height);
+      }
 
       y += lbl.height;
     }

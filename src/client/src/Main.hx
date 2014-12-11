@@ -204,6 +204,15 @@ class SampleData {
   }
 }
 
+class AllocData {
+  public var size:Int;
+  public var num:Int;
+
+  public function new() {
+    size = num = 0;
+  }
+}
+
 class FLMSession {
 
   public var frames:Array<Dynamic> = [];
@@ -721,7 +730,7 @@ class SelectionController {
       if (!e.shiftKey) start_sel++;
       end_sel++;
       redraw();
-    } else if (e.keyCode==37) {
+    } else if (e.keyCode==37) { // left
       if (!e.shiftKey) start_sel--;
       end_sel--;
       redraw();
@@ -1071,23 +1080,28 @@ class SelectionController {
     // - - - - - - - - - - - - - - -
     // - - Alloc pane - -
     // - - - - - - - - - - - - - - -
-    var allocs:StringMap<Int> = new StringMap<Int>();
-    each_frame(function(f) {
+    var allocs:StringMap<AllocData> = new StringMap<AllocData>();
+    var total = 0;
+    var total_size = 0;
+    each_frame(function(f) { // also updateObjects?
       var news:Array<Dynamic> = f.alloc!=null ? f.alloc.newObject : null;
       if (news!=null) {
         for (i in 0...news.length) {
           var item = news[i];
-          if (!allocs.exists(item.type)) allocs.set(item.type, 0);
-          allocs.set(item.type, allocs.get(item.type)+item.size);
+          if (!allocs.exists(item.type)) allocs.set(item.type, new AllocData());
+          var ad = allocs.get(item.type);
+          ad.size += item.size;
+          ad.num++;
 
-          trace(item);
-          var i:Int = item.stackid;
-          var stack = session.stack_strings[i-1];
-          while (session.stack_strings[i].indexOf('global')<0) {
-            stack += ", "+session.stack_strings[i];
-            i++;
-          }
-          trace(item.type+": "+stack);
+          total++;
+          total_size += item.size;
+
+          //var i:Int = item.stackid;
+          //var stack = session.stack_strings[i-1];
+          //while (session.stack_strings[i].indexOf('global')<0) {
+          //  stack += ", "+session.stack_strings[i];
+          //  i++;
+          //}
 
           //trace(session.stack_strings.length);
           //trace(session.stack_strings[item.stackid]);
@@ -1101,23 +1115,28 @@ class SelectionController {
     var y:Float = 0;
     var ping = true;
     for (type in allocs.keys()) {
+      var ad = allocs.get(type);
+
       var lbl = Util.make_label(type, 12, 0x66aadd);
       lbl.y = y;
       lbl.x = 15;
       alloc_pane.cont.addChild(lbl);
 
-      var val = allocs.get(type);
-      var suffix = val>8192 ? 'KB' : 'B';
-      val = val>8192 ? Math.floor(val/1024) : val;
-      var size = Util.make_label(Util.add_commas(val), 12, 0xeeeeee);
-      size.y = y;
-      size.x = alloc_pane.innerWidth-150-size.width;
-      alloc_pane.cont.addChild(size);
+      inline function draw_pct(cont, val:Int, total:Int, offset:Float) {
+        var unit:Int = Math.floor(val*100/total);
 
-      var suf = Util.make_label(suffix, 12, 0xeeeeee);
-      suf.y = size.y;
-      suf.x = alloc_pane.innerWidth - 150 + 5;
-      alloc_pane.cont.addChild(suf);
+        var num = Util.make_label((val==0)?"< 1" : val+"", 12, 0xeeeeee);
+        num.y = y;
+        num.x = offset - 55 - num.width;
+        cont.addChild(num);
+
+        var numpctunit = Util.make_label(unit+" %", 12, 0xeeeeee);
+        numpctunit.y = y;
+        numpctunit.x = offset - 10 - numpctunit.width;
+        cont.addChild(numpctunit);
+      }
+      draw_pct(alloc_pane.cont, ad.num, total, alloc_pane.innerWidth-180);
+      draw_pct(alloc_pane.cont, Math.round(ad.size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-20);
 
       ping = !ping;
       if (ping) {
@@ -1182,7 +1201,7 @@ class DetailUI {
     function handle_click(e:Event):Void { select(e.target); }
     AEL.add(p, MouseEvent.CLICK, handle_click);
     AEL.add(a, MouseEvent.CLICK, handle_click);
-    select(p);
+    select(a);
 
   }
 }

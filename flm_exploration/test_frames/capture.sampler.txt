@@ -338,9 +338,9 @@
 {"name":".mem.used","value":8290}
 {"name":".mem.managed","value":6676}
 {"name":".mem.managed.used","value":6107}
-{"name":".sampler.maxInterval","span":8,"delta":1420}
-{"name":".tlm.doplay","delta":1}
-{"name":".enter","span":20,"delta":27}
+{"name":".tlm.doplay","span":8,"delta":1420}
+{"name":".enter","delta":1}
+{"name":".network.localconnection.idle","span":20,"delta":27}
 {"name":".swf.frame","value":0}
 {"name":".trace","value":"At frame 2"}
 {"name":".as.event","span":166,"delta":191,"value":"enterFrame"}
@@ -373,7 +373,7 @@
 {"name":".rend.paintbits","span":319,"delta":331}
 {"name":".rend.update","span":329,"delta":4,"value":{"name":null,"xmax":640,"xmin":0,"ymax":480,"ymin":0,"modified":false,"symbolname":null}}
 {"name":".rend.screen","span":0,"delta":57}
-{"name":".network.localconnection.idle","span":2628,"delta":15}
+{"name":".exit","span":2628,"delta":15}
 {"name":".mem.total","value":9613}
 {"name":".mem.used","value":9501}
 {"name":".mem.managed","value":6684}
@@ -381,25 +381,25 @@
 {"name":".mem.bitmap","value":1200}
 {"name":".mem.bitmap.display","value":1200}
 {"name":".mem.script","value":3}
-{"name":".sampler.maxInterval","span":10,"delta":17140}
-{"name":".tlm.doplay","delta":2}
-{"name":".enter","span":18,"delta":25}
-{"name":".exit","value":0}
+{"name":".tlm.doplay","span":10,"delta":17140}
+{"name":".enter","delta":2}
+{"name":".network.localconnection.idle","span":18,"delta":25}
+{"name":".swf.frame","value":0}
 {"name":".trace","value":"At frame 3"}
-{"name":".as.event","span":38,"delta":95,"value":"At frame 2"}
-{"name":"enterFrame","span":88,"delta":2}
+{"name":".as.event","span":38,"delta":95,"value":"enterFrame"}
+{"name":".player.enterframe","span":88,"delta":2}
 {"name":".as.actions","span":5,"delta":10}
-{"name":".rend.display.create","span":95,"delta":113}
-{"name":".rend.paintbits","span":103,"delta":3,"value":{"name":null,"xmax":640,"xmin":0,"ymax":480,"ymin":0,"modified":false,"symbolname":null}}
-{"name":"modified","span":0,"delta":47}
-{"name":".network.localconnection.idle","span":308,"delta":14}
+{"name":".rend.paintbits","span":95,"delta":113}
+{"name":".rend.update","span":103,"delta":3,"value":{"name":null,"xmax":640,"xmin":0,"ymax":480,"ymin":0,"modified":false,"symbolname":null}}
+{"name":".rend.screen","span":0,"delta":47}
+{"name":".exit","span":308,"delta":14}
 {"name":".gc.Reap","span":5,"delta":23}
-{"name":".tlm.doplay","delta":17112}
-{"name":".enter","span":16,"delta":22}
-{"name":".exit","value":0}
+{"name":".enter","delta":17112}
+{"name":".network.localconnection.idle","span":16,"delta":22}
+{"name":".swf.frame","value":0}
 {"name":".trace","value":"At frame 4"}
 {"name":".trace","value":"Goodbye!"}
-{"name":".as.event","span":192,"delta":202,"value":"At frame 2"}
-{"name":"enterFrame","span":198,"delta":2}
-{"name":".network.localconnection.idle","span":250,"delta":26}
+{"name":".as.event","span":192,"delta":202,"value":"enterFrame"}
+{"name":".player.enterframe","span":198,"delta":2}
+{"name":".exit","span":250,"delta":26}
 {"name":".gc.Reap","span":5,"delta":19}

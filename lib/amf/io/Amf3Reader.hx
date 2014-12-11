@@ -7,6 +7,7 @@ import amf.Types;
 
 
 class Amf3Reader {	
+	public var decodedBytes: Array<String>;
 	public var decodedStrings: Array<String>;
 	public var decodedObjects: Array<Dynamic>;
 	public var decodedClassDefs: Array<ClassDef>;
@@ -15,6 +16,7 @@ class Amf3Reader {
 	public function new(i: haxe.io.Input) {
 		input = i;
 		input.bigEndian = true;
+    decodedBytes = [];
 		decodedStrings = [];
 		decodedObjects = [];
 		decodedClassDefs = [];
@@ -76,7 +78,7 @@ class Amf3Reader {
   }
 
 	private function readAmf3ByteArray() {
-		var data = readAmf3String();		
+		var data = readAmf3String(decodedBytes);
 		//return Bytes.ofData(BytesData.ofString(data));
 		return Bytes.ofString(data);
 		//return haxe.io.Bytes.ofData(NativeString.ofString(data));
@@ -88,29 +90,30 @@ class Amf3Reader {
 		return flag & 1 == 0 ? Date.fromTime(input.readDouble())
 			: cast decodedObjects[flag >> 1];
 	}
-	
+
 	/**
 	 * a String is encoded in UTF format
 	 */
-	private function readAmf3String(): String {
+	private function readAmf3String(cache:Array<String>=null): String {
 		var strref = readAmf3Int();
-		
+		if (cache==null) cache = decodedStrings;
+
 		var result = "";
 		if (strref & 0x01 == 0) {
 			strref = strref >> 1;
 			
-			if (strref >= decodedStrings.length) {
+			if (strref >= cache.length) {
 				throw "Undefined String reference";
 			}
 
 		
-			result = decodedStrings[strref];
+			result = cache[strref];
 		} else {
 			var length = strref >> 1;
 			
 			if (length > 0) {
 				result = input.read(length).toString();
-				decodedStrings.push(result);
+				cache.push(result);
 			}
 		}
 

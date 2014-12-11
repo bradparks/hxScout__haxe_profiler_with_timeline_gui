@@ -174,8 +174,7 @@ class Util {
     if (sec<10) rtn += "0";
     rtn += Math.floor(sec)+".";
     var dec = Math.floor((sec%1)*1000);
-    if (dec<1) rtn += "000";
-    else if (dec<10) rtn += "00";
+    if (dec<10) rtn += "00";
     else if (dec<100) rtn += "0";
     rtn += dec;
     return rtn;

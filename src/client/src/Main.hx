@@ -1214,7 +1214,7 @@ class DetailUI {
     function handle_click(e:Event):Void { select(e.target); }
     AEL.add(p, MouseEvent.CLICK, handle_click);
     AEL.add(a, MouseEvent.CLICK, handle_click);
-    select(a);
+    select(p);
 
   }
 

@@ -395,6 +395,7 @@ class HXScoutClientGUI extends Sprite
     resize_pane(0, 0, alloc_pane,  0, 20, detail_pane.innerWidth, detail_pane.innerHeight-20);
 
     if (stage!=null) sel_ctrl.redraw();
+    detail_ui.resize();
   }
 
   inline function resize_pane(stage_w:Float, stage_h:Float, pane:Sprite, x:Float, y:Float, w:Float, h:Float)
@@ -1125,7 +1126,7 @@ class SelectionController {
       inline function draw_pct(cont, val:Int, total:Int, offset:Float) {
         var unit:Int = Math.floor(val*100/total);
 
-        var num = Util.make_label((val==0)?"< 1" : val+"", 12, 0xeeeeee);
+        var num = Util.make_label((val==0)?"< 1" : Util.add_commas(val), 12, 0xeeeeee);
         num.y = y;
         num.x = offset - 55 - num.width;
         cont.addChild(num);
@@ -1135,8 +1136,8 @@ class SelectionController {
         numpctunit.x = offset - 10 - numpctunit.width;
         cont.addChild(numpctunit);
       }
-      draw_pct(alloc_pane.cont, ad.num, total, alloc_pane.innerWidth-180);
-      draw_pct(alloc_pane.cont, Math.round(ad.size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-20);
+      draw_pct(alloc_pane.cont, ad.num, total, alloc_pane.innerWidth-120);
+      draw_pct(alloc_pane.cont, Math.round(ad.size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10);
 
       ping = !ping;
       if (ping) {
@@ -1156,6 +1157,9 @@ class DetailUI {
   private var alloc_pane:Pane;
   private var sel_ctrl:SelectionController;
   private var get_detail_factor:Void->Float;
+
+  private var plbl:openfl.text.TextField;
+  private var albl:openfl.text.TextField;
 
   public function new (detail_pane, sample_pane, alloc_pane):Void
   {
@@ -1187,6 +1191,13 @@ class DetailUI {
     a.x = p.x+p.width+5;
     detail_pane.cont.addChild(a);
 
+    plbl = Util.make_label("Self Time (ms)              Total Time (ms)", 12);
+    detail_pane.cont.addChild(plbl);
+
+    albl = Util.make_label("Number                          Size (KB)", 12);
+    detail_pane.cont.addChild(albl);
+
+
     function select(tgt:Sprite):Void
     {
       var highlight_on = new openfl.geom.ColorTransform(1,1.02,1.04,1,10,10,10);
@@ -1196,6 +1207,8 @@ class DetailUI {
       a.transform.colorTransform = tgt==a ? highlight_on : highlight_off;
       sample_pane.visible = tgt==p;
       alloc_pane.visible = tgt==a;
+      plbl.visible = tgt==p;
+      albl.visible = tgt==a;
       profiler.alpha = alloc.alpha = 1; // openfl bug /w set colortransform / cached textfields?
     }
     function handle_click(e:Event):Void { select(e.target); }
@@ -1204,6 +1217,13 @@ class DetailUI {
     select(a);
 
   }
+
+  public function resize():Void
+  {
+    plbl.x = detail_pane.innerWidth - plbl.width - 30;
+    albl.x = detail_pane.innerWidth - albl.width - 30;
+  }
+
 }
 
 class Pane extends Sprite {

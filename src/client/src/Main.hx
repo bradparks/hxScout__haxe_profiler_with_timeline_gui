@@ -1158,6 +1158,8 @@ class DetailUI {
   private var sel_ctrl:SelectionController;
   private var get_detail_factor:Void->Float;
 
+  private var pcont:Sprite;
+  private var acont:Sprite;
   private var plbl:openfl.text.TextField;
   private var albl:openfl.text.TextField;
 
@@ -1168,10 +1170,10 @@ class DetailUI {
     this.alloc_pane = alloc_pane;
 
 
-    var profiler = Util.make_label("Profiler Samples", 12);
+    var profiler = Util.make_label("Profiler", 12);
     profiler.filters = [Util.TEXT_SHADOW];
     profiler.mouseEnabled = false;
-    var p = new Sprite();
+    var p = pcont = new Sprite();
     Util.gray_gradient(p.graphics, profiler.width*1.4, profiler.height);
     p.graphics.lineStyle(1, 0x555555);
     p.graphics.drawRect(0,0,profiler.width*1.4, profiler.height);
@@ -1179,10 +1181,10 @@ class DetailUI {
     p.addChild(profiler);
     detail_pane.cont.addChild(p);
 
-    var alloc = Util.make_label("Memory Allocations", 12);
+    var alloc = Util.make_label("Memory", 12);
     alloc.filters = [Util.TEXT_SHADOW];
     alloc.mouseEnabled = false;
-    var a = new Sprite();
+    var a = acont = new Sprite();
     Util.gray_gradient(a.graphics, alloc.width*1.4, alloc.height);
     a.graphics.lineStyle(1, 0x555555);
     a.graphics.drawRect(0,0,alloc.width*1.4, alloc.height);
@@ -1197,25 +1199,37 @@ class DetailUI {
     albl = Util.make_label("Number                          Size (KB)", 12);
     detail_pane.cont.addChild(albl);
 
-
-    function select(tgt:Sprite):Void
-    {
-      var highlight_on = new openfl.geom.ColorTransform(1,1.02,1.04,1,10,10,10);
-      var highlight_off = new openfl.geom.ColorTransform(0.97,0.97,0.97,1,-20,-20,-20);
-
-      p.transform.colorTransform = tgt==p ? highlight_on : highlight_off;
-      a.transform.colorTransform = tgt==a ? highlight_on : highlight_off;
-      sample_pane.visible = tgt==p;
-      alloc_pane.visible = tgt==a;
-      plbl.visible = tgt==p;
-      albl.visible = tgt==a;
-      profiler.alpha = alloc.alpha = 1; // openfl bug /w set colortransform / cached textfields?
-    }
     function handle_click(e:Event):Void { select(e.target); }
     AEL.add(p, MouseEvent.CLICK, handle_click);
     AEL.add(a, MouseEvent.CLICK, handle_click);
     select(p);
 
+    AEL.add(Util.stage, KeyboardEvent.KEY_DOWN, handle_key);
+  }
+
+  function handle_key(ev:Event)
+  {
+    var e = cast(ev, KeyboardEvent);
+    if (e.keyCode==9) { // tab
+      select((alloc_pane.visible) ? pcont : acont);
+    }
+  }
+
+  private function select(tgt:Sprite):Void
+  {
+    var highlight_on = new openfl.geom.ColorTransform(1,1.02,1.04,1,10,10,10);
+    var highlight_off = new openfl.geom.ColorTransform(0.97,0.97,0.97,1,-20,-20,-20);
+
+    pcont.transform.colorTransform = tgt==pcont ? highlight_on : highlight_off;
+    acont.transform.colorTransform = tgt==acont ? highlight_on : highlight_off;
+    sample_pane.visible = tgt==pcont;
+    alloc_pane.visible = tgt==acont;
+    plbl.visible = tgt==pcont;
+    albl.visible = tgt==acont;
+
+    // openfl bug /w set colortransform / cached textfields?
+    pcont.getChildAt(0).alpha = 1;
+    acont.getChildAt(0).alpha = 1;
   }
 
   public function resize():Void

@@ -746,13 +746,20 @@ class SelectionController {
   {
     var e = cast(ev, KeyboardEvent);
     trace(e.keyCode);
+    var session:FLMSession = get_active_session();
     if (e.keyCode==39) { // right
+      if (end_sel>=session.frames.length || (!e.shiftKey && start_sel>=session.frames.length)) return;
       if (!e.shiftKey) start_sel++;
       end_sel++;
       redraw();
     } else if (e.keyCode==37) { // left
+      if ((start_sel<2 && !e.shiftKey) || end_sel<2) return;
       if (!e.shiftKey) start_sel--;
       end_sel--;
+      redraw();
+    } else if (e.keyCode==65 && e.ctrlKey) { // ctrl-a
+      start_sel = 1;
+      end_sel = session.frames.length;
       redraw();
     }
   }
@@ -1146,7 +1153,16 @@ class SelectionController {
         //trace(strings);
       }
 
-      var lbl = Util.make_label(type, 12, 0x66aadd);
+      // type name formatting
+      if (type.substr(0,7)=='[object') type = type.substr(8, type.length-9);
+      if (type.substr(0,6)=='[class') type = type.substr(7, type.length-8);
+      type = (~/\$$/).replace(type, ' <static>');
+      var clo = type.indexOf('::');
+      if (clo>=0) {
+        type = 'Closure ['+type.substr(clo+2)+' ('+type.substr(0,clo)+')]';
+      }
+
+      var lbl = Util.make_label(type, 12, 0x227788);
       lbl.y = y;
       lbl.x = 15;
       alloc_pane.cont.addChild(lbl);

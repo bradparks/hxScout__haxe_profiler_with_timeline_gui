@@ -266,10 +266,27 @@ class FLMListener {
         // - - - - - - - - - - - -
         if (name.indexOf(".memory.")==0) {
           var type:String = name.substr(8);
-          //if (cur_frame.mem[type]==null) cur_frame.mem[type] = 0;
-          if (!cur_frame.alloc.exists(type)) cur_frame.alloc.set(type, new Array<Dynamic>());
-          cur_frame.alloc.get(type).push(data["value"]);
-          //if (type!="stackIdMap") trace("Pushed["+type+"]: "+data["value"]);
+
+          if (type=="stackIdMap") {
+            var maps:Array<Int> = data["value"]; // len, val, val, val, len, val, ...
+            if (cur_frame.push_stack_maps==null) cur_frame.push_stack_maps = new Array<Array<Int>>();
+            //trace("Push maps: "+maps);
+            var len = maps[0];
+            cur_frame.push_stack_maps.push(new Array<Int>());
+            for (i in 1...maps.length) {
+              if (len-- == 0) {
+                len = maps[i];
+                cur_frame.push_stack_maps.push(new Array<Int>());
+              } else {
+                cur_frame.push_stack_maps[cur_frame.push_stack_maps.length-1].push(maps[i]);
+              }
+            }
+            //trace(cur_frame.push_stack_maps);
+          } else {
+            // newObject, deleteObject, updateObject
+            if (!cur_frame.alloc.exists(type)) cur_frame.alloc.set(type, new Array<Dynamic>());
+            cur_frame.alloc.get(type).push(data["value"]);
+          }
         }
 
         // - - - - - - - - - - - -
@@ -327,6 +344,7 @@ class Frame {
   public var mem:Map<String, Int>;
   public var samples:Array<Dynamic>;
   public var push_stack_strings:Array<String>;
+  public var push_stack_maps:Array<Array<Int>>;
   public var cpu:Float;
   public var alloc:StringMap<Array<Dynamic>>;
   //public var events:Array<Dynamic>;
@@ -351,6 +369,7 @@ class Frame {
     mem = new Map<String, Int>();
     samples = null;
     push_stack_strings = null;
+    push_stack_maps = null;
     cpu = 0;
     alloc = new StringMap<Array<Dynamic>>();
 #if DEBUG_UNKNOWN
@@ -369,6 +388,7 @@ class Frame {
 #end
       duration:duration,
       push_stack_strings:push_stack_strings,
+      push_stack_maps:push_stack_maps,
       samples:samples,
       alloc:alloc,
       cpu:cpu,

@@ -204,12 +204,20 @@ class SampleData {
   }
 }
 
+typedef AllocSize = {
+  size:Int,
+  num:Int
+}
+
 class AllocData {
-  public var size:Int;
-  public var num:Int;
+  public var per_stack_map:StringMap<AllocSize>;
+  public var total_size:Int;
+  public var total_num:Int;
 
   public function new() {
-    size = num = 0;
+    per_stack_map = new StringMap<AllocSize>();
+    total_size = 0;
+    total_num = 0;
   }
 }
 
@@ -220,6 +228,7 @@ class FLMSession {
   public var temp_running_mem:StringMap<Int>;
   public var name:String;
   public var stack_strings:Array<String> = ["1-indexed"];
+  public var stack_maps:Array<Array<Int>> = new Array<Array<Int>>();
   public var ses_tile:Sprite;
   public var last_nav_sel:Array<Int>;
 
@@ -236,12 +245,22 @@ class FLMSession {
       return; // Not really frame data...
     }
 
+    // For profiler samples && memory allocation stacks...
     if (frame_data.push_stack_strings!=null) {
       var strings:Array<String> = frame_data.push_stack_strings;
       for (str in strings) {
         stack_strings.push(str);
       }
     }
+
+    // For memory alloc stacks...
+    if (frame_data.push_stack_maps!=null) {
+      var maps:Array<Array<Int>> = frame_data.push_stack_maps;
+      for (map in maps) {
+        stack_maps.push(map);
+      }
+    }
+
     if (frame_data.samples!=null) {
       collate_sample_data(frame_data);
     }
@@ -1077,12 +1096,11 @@ class SelectionController {
     }
     display_samples(top_down);
 
-
     // - - - - - - - - - - - - - - -
     // - - Alloc pane - -
     // - - - - - - - - - - - - - - -
     var allocs:StringMap<AllocData> = new StringMap<AllocData>();
-    var total = 0;
+    var total_num = 0;
     var total_size = 0;
     each_frame(function(f) { // also updateObjects?
       var news:Array<Dynamic> = f.alloc!=null ? f.alloc.newObject : null;
@@ -1091,23 +1109,18 @@ class SelectionController {
           var item = news[i];
           if (!allocs.exists(item.type)) allocs.set(item.type, new AllocData());
           var ad = allocs.get(item.type);
-          ad.size += item.size;
-          ad.num++;
+          //trace("pushing stackId: "+item);
+          if (!ad.per_stack_map.exists(item.stackid)) {
+            var as:AllocSize = { size:0, num:0 };
+            ad.per_stack_map.set(item.stackid, as);
+          }
+          ad.per_stack_map.get(item.stackid).size += item.size;
+          ad.per_stack_map.get(item.stackid).num++;
+          ad.total_size += item.size;
+          ad.total_num++;
 
-          total++;
+          total_num++;
           total_size += item.size;
-
-          //var i:Int = item.stackid;
-          //var stack = session.stack_strings[i-1];
-          //while (session.stack_strings[i].indexOf('global')<0) {
-          //  stack += ", "+session.stack_strings[i];
-          //  i++;
-          //}
-
-          //trace(session.stack_strings.length);
-          //trace(session.stack_strings[item.stackid]);
-          //trace(session.stack_strings[item.stackid+1]);
-          //trace(session.stack_strings[item.stackid+2]);
         }
       }
     });
@@ -1117,6 +1130,21 @@ class SelectionController {
     var ping = true;
     for (type in allocs.keys()) {
       var ad = allocs.get(type);
+
+      //trace(type+": ad at stacks: ");
+      var stackids:Array<String> = new Array<String>();
+      var k = ad.per_stack_map.keys();
+      while (k.hasNext()) stackids.push(k.next()); 
+      //trace(stackids);
+      for (stackid in stackids) {
+        var id = Std.parseInt(stackid);
+        var callstack:Array<Int> = session.stack_maps[id];
+        var strings:Array<String> = new Array<String>();
+        for (i in 0...callstack.length) {
+          strings.push(session.stack_strings[callstack[i]]);
+        }
+        //trace(strings);
+      }
 
       var lbl = Util.make_label(type, 12, 0x66aadd);
       lbl.y = y;
@@ -1136,8 +1164,8 @@ class SelectionController {
         numpctunit.x = offset - 10 - numpctunit.width;
         cont.addChild(numpctunit);
       }
-      draw_pct(alloc_pane.cont, ad.num, total, alloc_pane.innerWidth-120);
-      draw_pct(alloc_pane.cont, Math.round(ad.size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10);
+      draw_pct(alloc_pane.cont, ad.total_num, total_num, alloc_pane.innerWidth-120);
+      draw_pct(alloc_pane.cont, Math.round(ad.total_size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10);
 
       ping = !ping;
       if (ping) {
@@ -1217,8 +1245,8 @@ class DetailUI {
 
   private function select(tgt:Sprite):Void
   {
-    var highlight_on = new openfl.geom.ColorTransform(1,1.02,1.04,1,10,10,10);
-    var highlight_off = new openfl.geom.ColorTransform(0.97,0.97,0.97,1,-20,-20,-20);
+    var highlight_on = new openfl.geom.ColorTransform(1,1.02,1.04,1,0,0,0);
+    var highlight_off = new openfl.geom.ColorTransform(0.5,0.5,0.5,1,10,10,10);
 
     pcont.transform.colorTransform = tgt==pcont ? highlight_on : highlight_off;
     acont.transform.colorTransform = tgt==acont ? highlight_on : highlight_off;

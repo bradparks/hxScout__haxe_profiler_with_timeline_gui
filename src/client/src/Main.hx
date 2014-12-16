@@ -602,7 +602,7 @@ class HXScoutClientGUI extends Sprite
       var m = new flash.geom.Matrix();
       m.scale(rescale, 1);
       bd.draw(nav_pane.cont, m, null, null, null, true);
-     
+
       cast(nav_pane.cont.getChildAt(0)).bitmapData.dispose();
       cast(nav_pane.cont.getChildAt(0)).bitmapData = bd;
       nav_scalex *= rescale;
@@ -884,7 +884,7 @@ class SelectionController {
       total += f.duration.total;
       for (key in timing_keys) {
         if (!durations.exists(key)) durations.set(key, 0);
-        var val = Reflect.field(f.duration, key); 
+        var val = Reflect.field(f.duration, key);
         durations.set(key, durations.get(key)+val);
         active += val;
       }
@@ -988,7 +988,7 @@ class SelectionController {
       aval.y = albl.y;
       aval.x = ftxt.x + 30 - aval.width;
       summary_pane.cont.addChild(aval);
-   
+
       summary_pane.cont.graphics.beginFill(0xffffff, 0.07);
       summary_pane.cont.graphics.drawRect(10, albl.y, summary_pane.innerWidth-20, albl.height-1);
       summary_pane.cont.graphics.beginFill(val.color);
@@ -1031,7 +1031,7 @@ class SelectionController {
       aval.y = albl.y;
       aval.x = ftxt.x + 30 - aval.width;
       summary_pane.cont.addChild(aval);
-   
+
       summary_pane.cont.graphics.beginFill(0xffffff, 0.07);
       summary_pane.cont.graphics.drawRect(10, albl.y, summary_pane.innerWidth-20, albl.height-1);
       summary_pane.cont.graphics.beginFill(val.color);
@@ -1138,21 +1138,6 @@ class SelectionController {
     for (type in allocs.keys()) {
       var ad = allocs.get(type);
 
-      //trace(type+": ad at stacks: ");
-      var stackids:Array<String> = new Array<String>();
-      var k = ad.per_stack_map.keys();
-      while (k.hasNext()) stackids.push(k.next()); 
-      //trace(stackids);
-      for (stackid in stackids) {
-        var id = Std.parseInt(stackid);
-        var callstack:Array<Int> = session.stack_maps[id];
-        var strings:Array<String> = new Array<String>();
-        for (i in 0...callstack.length) {
-          strings.push(session.stack_strings[callstack[i]]);
-        }
-        //trace(strings);
-      }
-
       // type name formatting
       if (type.substr(0,7)=='[object') type = type.substr(8, type.length-9);
       if (type.substr(0,6)=='[class') type = type.substr(7, type.length-8);
@@ -1190,6 +1175,35 @@ class SelectionController {
       }
 
       y += lbl.height;
+
+      // stacks
+      trace(type+": ad at stacks: ");
+      var stacks:Array<Array<String>> = new Array<Array<String>>();
+      var stackids:Array<String> = new Array<String>();
+      var k = ad.per_stack_map.keys();
+      while (k.hasNext()) stackids.push(k.next());
+      //trace(stackids);
+      for (stackid in stackids) {
+        var id = Std.parseInt(stackid);
+        var callstack:Array<Int> = session.stack_maps[id];
+        stacks.push(new Array<String>());
+        for (i in 0...callstack.length) {
+          stacks[stacks.length-1].push(session.stack_strings[callstack[i]]);
+          var stack = Util.make_label(session.stack_strings[callstack[i]], 12, 0x66aadd);
+          stack.x = 30 + i*15;
+          stack.y = y;
+          alloc_pane.cont.addChild(stack);
+
+          ping = !ping;
+          if (ping) {
+            alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
+            alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,stack.height);
+          }
+          y += stack.height;
+        }
+      }
+      trace(stacks);
+
     }
 
   }

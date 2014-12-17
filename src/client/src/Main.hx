@@ -1177,25 +1177,24 @@ class SelectionController {
 
       y += lbl.height;
 
-      // stacks
-      //trace(type+": ad at stacks: ");
-      //var stacks:Array<Array<String>> = new Array<Array<String>>();
+      // stacks (bottom-up objects)
       var stackids:Array<String> = new Array<String>();
       var k = ad.per_stack_map.keys();
       while (k.hasNext()) stackids.push(k.next());
-      //trace(stackids);
 
       if (stackids.length>0) {
         Util.add_collapse_button(cont, lbl, false, alloc_pane.invalidate_scrollbars);
       }
 
+      //trace(type+":");
+      //trace("num: "+ad.total_num+", size:"+ad.total_size);
       for (stackid in stackids) {
+        var psm = ad.per_stack_map.get(stackid);
+        trace(psm);
         var id = Std.parseInt(stackid);
         var callstack:Array<Int> = session.stack_maps[id];
-        //stacks.push(new Array<String>());
         var last_cont:Sprite = null;
         for (i in 0...callstack.length) {
-          //stacks[stacks.length-1].push(session.stack_strings[callstack[i]]);
           var stack = Util.make_label(session.stack_strings[callstack[i]], 12, 0x66aadd);
           var cont = new Sprite();
           cont.addChild(stack);
@@ -1204,6 +1203,9 @@ class SelectionController {
           alloc_pane.cont.addChild(cont);
 
           if (i<callstack.length-1) Util.add_collapse_button(cont, stack, false, alloc_pane.invalidate_scrollbars);
+
+          draw_pct(cont, psm.num, total_num, alloc_pane.innerWidth-120-cont.x+15);
+          draw_pct(cont, Math.round(psm.size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10-cont.x+15);
 
           //ping = !ping;
           //if (ping) {
@@ -1214,7 +1216,6 @@ class SelectionController {
           y += stack.height;
         }
       }
-      //trace(stacks);
 
     }
 

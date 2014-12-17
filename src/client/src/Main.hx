@@ -87,16 +87,16 @@ class Main extends Sprite {
   function center(e=null) {
     this.x = stage.stageWidth/2;
     this.y = stage.stageHeight/2;
-    //fps.x = -this.x;
-    //fps.y = -this.y;
+    fps.x = -this.x;
+    fps.y = -this.y;
     if (gui!=null) gui.resize(stage.stageWidth, stage.stageHeight);
   }
 
   function setup_stage()
   {
-    //fps = new openfl.display.FPS(0,0,0xffffff);
-    //fps.mouseEnabled = false;
-    //addChild(fps);
+    fps = new openfl.display.FPS(0,0,0xffffff);
+    fps.mouseEnabled = false;
+    addChild(fps);
     center();
     stage.addEventListener(flash.events.Event.RESIZE, center);
   }
@@ -1148,31 +1148,32 @@ class SelectionController {
       }
 
       var lbl = Util.make_label(type, 12, 0x227788);
-      lbl.y = y;
-      lbl.x = 15;
-      alloc_pane.cont.addChild(lbl);
+      var cont = new Sprite();
+      cont.y = y;
+      cont.x = 15;
+      cont.addChild(lbl);
+      alloc_pane.cont.addChild(cont);
 
       inline function draw_pct(cont, val:Int, total:Int, offset:Float) {
         var unit:Int = Math.floor(val*100/total);
 
         var num = Util.make_label((val==0)?"< 1" : Util.add_commas(val), 12, 0xeeeeee);
-        num.y = y;
-        num.x = offset - 55 - num.width;
+        num.x = offset - 70 - num.width;
         cont.addChild(num);
 
         var numpctunit = Util.make_label(unit+" %", 12, 0xeeeeee);
-        numpctunit.y = y;
-        numpctunit.x = offset - 10 - numpctunit.width;
+        numpctunit.x = offset - 25 - numpctunit.width;
         cont.addChild(numpctunit);
       }
-      draw_pct(alloc_pane.cont, ad.total_num, total_num, alloc_pane.innerWidth-120);
-      draw_pct(alloc_pane.cont, Math.round(ad.total_size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10);
+      draw_pct(cont, ad.total_num, total_num, alloc_pane.innerWidth-120);
+      draw_pct(cont, Math.round(ad.total_size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10);
 
-      ping = !ping;
-      if (ping) {
-        alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
-        alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,lbl.height);
-      }
+      // TODO: background graphics on special shape
+      //ping = !ping;
+      //if (ping) {
+      //  alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
+      //  alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,lbl.height);
+      //}
 
       y += lbl.height;
 
@@ -1183,22 +1184,33 @@ class SelectionController {
       var k = ad.per_stack_map.keys();
       while (k.hasNext()) stackids.push(k.next());
       //trace(stackids);
+
+      if (stackids.length>0) {
+        Util.add_collapse_button(cont, lbl, false, alloc_pane.invalidate_scrollbars);
+      }
+
       for (stackid in stackids) {
         var id = Std.parseInt(stackid);
         var callstack:Array<Int> = session.stack_maps[id];
         stacks.push(new Array<String>());
+        var last_cont:Sprite = null;
         for (i in 0...callstack.length) {
           stacks[stacks.length-1].push(session.stack_strings[callstack[i]]);
           var stack = Util.make_label(session.stack_strings[callstack[i]], 12, 0x66aadd);
-          stack.x = 30 + i*15;
-          stack.y = y;
-          alloc_pane.cont.addChild(stack);
+          var cont = new Sprite();
+          cont.addChild(stack);
+          cont.x = 30+15*i;
+          cont.y = y;
+          alloc_pane.cont.addChild(cont);
 
-          ping = !ping;
-          if (ping) {
-            alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
-            alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,stack.height);
-          }
+          if (i<callstack.length-1) Util.add_collapse_button(cont, stack, false, alloc_pane.invalidate_scrollbars);
+
+          //ping = !ping;
+          //if (ping) {
+          //  alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
+          //  alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,stack.height);
+          //}
+          last_cont = cont;
           y += stack.height;
         }
       }
@@ -1358,6 +1370,10 @@ class Pane extends Sprite {
     return cont;
   }
 
+  public function invalidate_scrollbars():Void {
+    _scroll_invalid = true;
+  }
+
   private function handle_scroll_wheel(e:Event):Void
   {
     //trace("wheel event, delta="+cast(e).delta+", sby="+_scrollbary+", scrollrect.y="+cont.scrollRect.y);
@@ -1393,6 +1409,7 @@ class Pane extends Sprite {
     var rect = cont.scrollRect;
     var bounds = cont.getBounds(cont);
 
+    if (_scrollbary) trace(bounds);
     scrollbars.graphics.clear();
     if (_scrollbary && rect.height<bounds.height) {
       scrollbars.graphics.lineStyle(1, 0x0,0.2);

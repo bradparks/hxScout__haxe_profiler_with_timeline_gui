@@ -109,7 +109,7 @@ class Util {
     GRADIENT_M.createGradientBox(w, h, angle);
     g.beginGradientFill(openfl.display.GradientType.LINEAR,
                         [c1,c2],
-                        [1, 1],
+                        [1,1],
                         [0,255],
                         GRADIENT_M);
   }
@@ -179,4 +179,78 @@ class Util {
     rtn += dec;
     return rtn;
   }
+
+  public static function add_collapse_button(cont:Sprite,
+                                             lbl:TextField,
+                                             is_hidden:Bool,
+                                             do_refresh_scrollbars:Void->Void):Void
+  {
+    var r:flash.geom.Rectangle = lbl.getBounds(cont);
+    var btn:Sprite = new Sprite();
+    //btn.graphics.lineStyle(1, 0xeeeeee, 0.2);
+    btn.graphics.beginFill(0xeeeeee, 0.01);
+    btn.graphics.drawCircle(0, 0, r.height/3);
+    btn.x = r.x-(r.height/3);
+    btn.y = r.y+r.height/2;
+    btn.graphics.lineStyle(0,0,0);
+    btn.graphics.beginFill(0xeeeeee, 0.4);
+    btn.graphics.moveTo(-r.height/4, -r.height/5);
+    btn.graphics.lineTo( r.height/4, -r.height/5);
+    btn.graphics.lineTo(          0,  r.height/5-1);
+    btn.rotation = is_hidden ? -90 : 0;
+    cont.addChild(btn);
+    btn.name = "collapse_btn";
+
+    function do_hide():Void
+    {
+      var idx = cont.parent.getChildIndex(cont);
+      var hiding = true;
+      var dy = 0.0;
+      for (i in (idx+1)...cont.parent.numChildren) {
+        var later = cont.parent.getChildAt(i);
+        if (later.x <= cont.x) hiding = false;
+        if (hiding && later.visible) {
+          later.visible = false;
+          dy += later.height;
+        }
+        later.y -= dy;
+      }
+    }
+
+    function do_show(recursive:Bool=true):Void
+    {
+      var idx = cont.parent.getChildIndex(cont);
+      var showing = true;
+      var dy = 0.0;
+      var at_x = recursive ? -1 : cont.parent.getChildAt(idx+1).x;
+      for (i in (idx+1)...cont.parent.numChildren) {
+        var later:Sprite = cast(cont.parent.getChildAt(i));
+        if (later.x <= cont.x) showing = false;
+        if (showing && !later.visible && (recursive || Math.abs(at_x-later.x)<0.01)) {
+          later.visible = true;
+          dy += later.height;
+          // Update newly visible button
+          var later_btn = later.getChildByName("collapse_btn");
+          if (later_btn!=null) {
+            later_btn.rotation = (recursive || cont.parent.getChildAt(i+1).visible) ? 0 : -90;
+          }
+        }
+        later.y += dy;
+      }
+    }
+
+    function toggle_collapse(e:Event=null):Void
+    {
+      is_hidden = !is_hidden;
+      Actuate.tween(btn, 0.2, { rotation: is_hidden ? -90 : 0 });
+      if (is_hidden) do_hide();
+      else do_show(cast(e).shiftKey);
+
+      // Invalidate scrollbars
+      do_refresh_scrollbars();
+    }
+
+    AEL.add(btn, MouseEvent.CLICK, toggle_collapse);
+  }
+
 }

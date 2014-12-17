@@ -1058,10 +1058,15 @@ class SelectionController {
       for (i in keys) {
         var sample = ptr.children.get(i);
 
+        var cont:Sprite = new Sprite();
+        cont.y = y;
+        cont.x = 15+indent*15;
+
         var lbl = Util.make_label(session.stack_strings[i], 12, 0x66aadd);
-        lbl.y = y;
-        lbl.x = indent*15;
-        sample_pane.cont.addChild(lbl);
+        lbl.x = 0;
+        cont.addChild(lbl);
+
+        if (sample.children.keys().hasNext()) Util.add_collapse_button(cont, lbl, false, sample_pane.invalidate_scrollbars);
 
         ping = !ping;
         if (ping) {
@@ -1071,31 +1076,29 @@ class SelectionController {
 
         // I'd use round, but Scout seems to use floor
         var pct = Math.max(0, Math.min(100, Math.floor(100*sample.total_time/total)))+"%";
-        var x:Float = sample_pane.innerWidth - 20;
+        var x:Float = sample_pane.innerWidth - 20 - (cont.x + 15);
         lbl = Util.make_label(pct, 12, 0xeeeeee);
-        lbl.y = y;
         lbl.x = x - lbl.width;
-        sample_pane.cont.addChild(lbl);
+        cont.addChild(lbl);
         x -= 60;
 
         lbl = Util.make_label(cast(sample.total_time), 12, 0xeeeeee);
-        lbl.y = y;
         lbl.x = x - lbl.width;
-        sample_pane.cont.addChild(lbl);
+        cont.addChild(lbl);
         x -= 80;
 
         // I'd use round, but Scout seems to use floor
         var pct = Math.max(0, Math.min(100, Math.floor(100*sample.self_time/total)))+"%";
         lbl = Util.make_label(pct, 12, 0xeeeeee);
-        lbl.y = y;
         lbl.x = x - lbl.width;
-        sample_pane.cont.addChild(lbl);
+        cont.addChild(lbl);
         x -= 60;
 
         lbl = Util.make_label(cast(sample.self_time), 12, 0xeeeeee);
-        lbl.y = y;
         lbl.x = x - lbl.width;
-        sample_pane.cont.addChild(lbl);
+        cont.addChild(lbl);
+
+        sample_pane.cont.addChild(cont);
 
         y += lbl.height;
         display_samples(sample, indent+1);

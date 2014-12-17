@@ -1178,8 +1178,8 @@ class SelectionController {
       y += lbl.height;
 
       // stacks
-      trace(type+": ad at stacks: ");
-      var stacks:Array<Array<String>> = new Array<Array<String>>();
+      //trace(type+": ad at stacks: ");
+      //var stacks:Array<Array<String>> = new Array<Array<String>>();
       var stackids:Array<String> = new Array<String>();
       var k = ad.per_stack_map.keys();
       while (k.hasNext()) stackids.push(k.next());
@@ -1192,10 +1192,10 @@ class SelectionController {
       for (stackid in stackids) {
         var id = Std.parseInt(stackid);
         var callstack:Array<Int> = session.stack_maps[id];
-        stacks.push(new Array<String>());
+        //stacks.push(new Array<String>());
         var last_cont:Sprite = null;
         for (i in 0...callstack.length) {
-          stacks[stacks.length-1].push(session.stack_strings[callstack[i]]);
+          //stacks[stacks.length-1].push(session.stack_strings[callstack[i]]);
           var stack = Util.make_label(session.stack_strings[callstack[i]], 12, 0x66aadd);
           var cont = new Sprite();
           cont.addChild(stack);
@@ -1214,7 +1214,7 @@ class SelectionController {
           y += stack.height;
         }
       }
-      trace(stacks);
+      //trace(stacks);
 
     }
 

@@ -192,11 +192,11 @@ class Util {
     btn.graphics.drawCircle(0, 0, r.height/3);
     btn.x = r.x-(r.height/3);
     btn.y = r.y+r.height/2;
-    btn.graphics.lineStyle(0,0,0);
-    btn.graphics.beginFill(0xeeeeee, 0.4);
-    btn.graphics.moveTo(-r.height/4, -r.height/5);
-    btn.graphics.lineTo( r.height/4, -r.height/5);
-    btn.graphics.lineTo(          0,  r.height/5-1);
+    btn.graphics.lineStyle(1,0xeeeeee,0.7);
+    btn.graphics.beginFill(0xeeeeee, 0.5);
+    btn.graphics.moveTo(-r.height/5, -r.height/5);
+    btn.graphics.lineTo( r.height/5, -r.height/5);
+    btn.graphics.lineTo(          0,  r.height/6);
     btn.rotation = is_hidden ? -90 : 0;
     cont.addChild(btn);
     btn.name = "collapse_btn";

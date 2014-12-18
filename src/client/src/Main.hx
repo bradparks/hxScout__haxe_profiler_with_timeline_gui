@@ -221,6 +221,15 @@ class AllocData {
   }
 }
 
+typedef UIState = {
+  nav_x:Float,
+  timing_scaley:Float,
+  memory_scaley:Float,
+  tab_idx:Int,
+  sel_start:Int,
+  sel_end:Int,
+};
+
 class FLMSession {
 
   public var frames:Array<Dynamic> = [];
@@ -230,7 +239,7 @@ class FLMSession {
   public var stack_strings:Array<String> = ["1-indexed"];
   public var stack_maps:Array<Array<Int>> = new Array<Array<Int>>();
   public var ses_tile:Sprite;
-  public var last_nav_sel:Array<Int>;
+  public var ui_state:UIState;
 
   public function new(iid:String)
   {
@@ -373,7 +382,7 @@ class HXScoutClientGUI extends Sprite
 
     sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, summary_pane, layout, get_active_session);
     nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane, sel_ctrl, function() { return layout.frame_width/nav_scalex; });
-    detail_ui = new DetailUI(detail_pane, sample_pane, alloc_pane);
+    detail_ui = new DetailUI(detail_pane, sample_pane, alloc_pane, sel_ctrl);
 
     addEventListener(Event.ENTER_FRAME, on_enter_frame);
   }
@@ -460,13 +469,14 @@ class HXScoutClientGUI extends Sprite
     if (active_session==n) return;
     if (n>=sessions.length) return; // invalid
 
-    if (active_session>=0) { // save current nav/sel
+    if (active_session>=0) { // save current ui_state
       var session:FLMSession = sessions[active_session];
-      session.last_nav_sel = [Std.int(timing_pane.cont.scrollRect.x),
-                              Std.int(1000*nav_ctrl.timing_scaley),
-                              Std.int(1000*nav_ctrl.memory_scaley),
-                              sel_ctrl.start_sel,
-                              sel_ctrl.end_sel];
+      session.ui_state = { nav_x:timing_pane.cont.scrollRect.x,
+                           timing_scaley:nav_ctrl.timing_scaley,
+                           memory_scaley:nav_ctrl.memory_scaley,
+                           tab_idx:detail_ui.sel_index,
+                           sel_start:sel_ctrl.start_sel,
+                           sel_end:sel_ctrl.end_sel };
     }
 
     for (i in 0...sessions.length) {
@@ -495,18 +505,32 @@ class HXScoutClientGUI extends Sprite
     var session:FLMSession = sessions[active_session];
     session.temp_running_mem = new StringMap<Int>();
 
-    // Restore nav/sel
-    if (session.last_nav_sel==null) session.last_nav_sel = [0, 1000, 1000, -1, -1];
+    { nav_x:timing_pane.cont.scrollRect.x,
+        timing_scaley:nav_ctrl.timing_scaley,
+        memory_scaley:nav_ctrl.memory_scaley,
+        tab_idx:detail_ui.sel_index,
+        sel_start:sel_ctrl.start_sel,
+        sel_end:sel_ctrl.end_sel }
+
+    // Restore ui_state
+    if (session.ui_state==null) session.ui_state = { nav_x:0.0,
+                                                     timing_scaley:1.0,
+                                                     memory_scaley:1.0,
+                                                     tab_idx:0,
+                                                     sel_start:-1,
+                                                     sel_end:-1 };
+
     var r = timing_pane.cont.scrollRect;
-    r.x = session.last_nav_sel[0];
+    r.x = session.ui_state.nav_x;
     timing_pane.cont.scrollRect = r;
     var r = memory_pane.cont.scrollRect;
-    r.x = session.last_nav_sel[0];
+    r.x = session.ui_state.nav_x;
     memory_pane.cont.scrollRect = r;
-    nav_ctrl.timing_scaley = session.last_nav_sel[1]/1000.0;
-    nav_ctrl.memory_scaley = session.last_nav_sel[2]/1000.0;
-    sel_ctrl.start_sel = session.last_nav_sel[3];
-    sel_ctrl.end_sel = session.last_nav_sel[4];
+    nav_ctrl.timing_scaley = session.ui_state.timing_scaley;
+    nav_ctrl.memory_scaley = session.ui_state.memory_scaley;
+    detail_ui.sel_index = session.ui_state.tab_idx;
+    sel_ctrl.start_sel = session.ui_state.sel_start;
+    sel_ctrl.end_sel = session.ui_state.sel_end;
     sel_ctrl.redraw();
   }
 
@@ -715,6 +739,8 @@ class SelectionController {
   private var summary_pane:Pane;
   private var layout:Dynamic;
   private var get_active_session:Void->FLMSession;
+
+  private var _detail_pane:Pane;
 
   private var selection:Shape;
   public var start_sel:Int;
@@ -1043,183 +1069,190 @@ class SelectionController {
     // - - - - - - - - - - - - - - -
     // - - Samples pane - -
     // - - - - - - - - - - - - - - -
-    var top_down = new SampleData();
-    var total:Float = 0;
-    each_frame(function(f) {
-      if (f.top_down!=null) SampleData.merge_sample_data(top_down, f.top_down);
-       total += f.duration.as/1000;
-    });
+    if (sample_pane.visible) {
 
-    var y:Float = 0;
-    var ping = true;
-    function display_samples(ptr:SampleData, indent:Int=0):Void
-    {
-      var keys = ptr.children.keys();
-      for (i in keys) {
-        var sample = ptr.children.get(i);
+      var top_down = new SampleData();
+      var total:Float = 0;
+      each_frame(function(f) {
+        if (f.top_down!=null) SampleData.merge_sample_data(top_down, f.top_down);
+        total += f.duration.as/1000;
+      });
 
-        var cont:Sprite = new Sprite();
-        cont.y = y;
-        cont.x = 15+indent*15;
+      var y:Float = 0;
+      var ping = true;
+      function display_samples(ptr:SampleData, indent:Int=0):Void
+      {
+        var keys = ptr.children.keys();
+        for (i in keys) {
+          var sample = ptr.children.get(i);
 
-        var lbl = Util.make_label(session.stack_strings[i], 12, 0x66aadd);
-        lbl.x = 0;
-        cont.addChild(lbl);
+          var cont:Sprite = new Sprite();
+          cont.y = y;
+          cont.x = 15+indent*15;
 
-        if (sample.children.keys().hasNext()) Util.add_collapse_button(cont, lbl, false, sample_pane.invalidate_scrollbars);
+          var lbl = Util.make_label(session.stack_strings[i], 12, 0x66aadd);
+          lbl.x = 0;
+          cont.addChild(lbl);
 
-        ping = !ping;
-        if (ping) {
-          sample_pane.cont.graphics.beginFill(0xffffff, 0.02);
-          sample_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,lbl.height);
+          if (sample.children.keys().hasNext()) Util.add_collapse_button(cont, lbl, false, sample_pane.invalidate_scrollbars);
+
+          ping = !ping;
+          if (ping) {
+            sample_pane.cont.graphics.beginFill(0xffffff, 0.02);
+            sample_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,lbl.height);
+          }
+
+          // I'd use round, but Scout seems to use floor
+          var pct = Math.max(0, Math.min(100, Math.floor(100*sample.total_time/total)))+"%";
+          var x:Float = sample_pane.innerWidth - 20 - (cont.x + 15);
+          lbl = Util.make_label(pct, 12, 0xeeeeee);
+          lbl.x = x - lbl.width;
+          cont.addChild(lbl);
+          x -= 60;
+
+          lbl = Util.make_label(cast(sample.total_time), 12, 0xeeeeee);
+          lbl.x = x - lbl.width;
+          cont.addChild(lbl);
+          x -= 80;
+
+          // I'd use round, but Scout seems to use floor
+          var pct = Math.max(0, Math.min(100, Math.floor(100*sample.self_time/total)))+"%";
+          lbl = Util.make_label(pct, 12, 0xeeeeee);
+          lbl.x = x - lbl.width;
+          cont.addChild(lbl);
+          x -= 60;
+
+          lbl = Util.make_label(cast(sample.self_time), 12, 0xeeeeee);
+          lbl.x = x - lbl.width;
+          cont.addChild(lbl);
+
+          sample_pane.cont.addChild(cont);
+
+          y += lbl.height;
+          display_samples(sample, indent+1);
         }
-
-        // I'd use round, but Scout seems to use floor
-        var pct = Math.max(0, Math.min(100, Math.floor(100*sample.total_time/total)))+"%";
-        var x:Float = sample_pane.innerWidth - 20 - (cont.x + 15);
-        lbl = Util.make_label(pct, 12, 0xeeeeee);
-        lbl.x = x - lbl.width;
-        cont.addChild(lbl);
-        x -= 60;
-
-        lbl = Util.make_label(cast(sample.total_time), 12, 0xeeeeee);
-        lbl.x = x - lbl.width;
-        cont.addChild(lbl);
-        x -= 80;
-
-        // I'd use round, but Scout seems to use floor
-        var pct = Math.max(0, Math.min(100, Math.floor(100*sample.self_time/total)))+"%";
-        lbl = Util.make_label(pct, 12, 0xeeeeee);
-        lbl.x = x - lbl.width;
-        cont.addChild(lbl);
-        x -= 60;
-
-        lbl = Util.make_label(cast(sample.self_time), 12, 0xeeeeee);
-        lbl.x = x - lbl.width;
-        cont.addChild(lbl);
-
-        sample_pane.cont.addChild(cont);
-
-        y += lbl.height;
-        display_samples(sample, indent+1);
       }
+      display_samples(top_down);
+
     }
-    display_samples(top_down);
 
     // - - - - - - - - - - - - - - -
     // - - Alloc pane - -
     // - - - - - - - - - - - - - - -
-    var allocs:StringMap<AllocData> = new StringMap<AllocData>();
-    var total_num = 0;
-    var total_size = 0;
-    each_frame(function(f) { // also updateObjects?
-      var news:Array<Dynamic> = f.alloc!=null ? f.alloc.newObject : null;
-      if (news!=null) {
-        for (i in 0...news.length) {
-          var item = news[i];
-          if (!allocs.exists(item.type)) allocs.set(item.type, new AllocData());
-          var ad = allocs.get(item.type);
-          //trace("pushing stackId: "+item);
-          if (!ad.per_stack_map.exists(item.stackid)) {
-            var as:AllocSize = { size:0, num:0 };
-            ad.per_stack_map.set(item.stackid, as);
+    if (alloc_pane.visible) {
+
+      var allocs:StringMap<AllocData> = new StringMap<AllocData>();
+      var total_num = 0;
+      var total_size = 0;
+      each_frame(function(f) { // also updateObjects?
+        var news:Array<Dynamic> = f.alloc!=null ? f.alloc.newObject : null;
+        if (news!=null) {
+          for (i in 0...news.length) {
+            var item = news[i];
+            if (!allocs.exists(item.type)) allocs.set(item.type, new AllocData());
+            var ad = allocs.get(item.type);
+            //trace("pushing stackId: "+item);
+            if (!ad.per_stack_map.exists(item.stackid)) {
+              var as:AllocSize = { size:0, num:0 };
+              ad.per_stack_map.set(item.stackid, as);
+            }
+            ad.per_stack_map.get(item.stackid).size += item.size;
+            ad.per_stack_map.get(item.stackid).num++;
+            ad.total_size += item.size;
+            ad.total_num++;
+
+            total_num++;
+            total_size += item.size;
           }
-          ad.per_stack_map.get(item.stackid).size += item.size;
-          ad.per_stack_map.get(item.stackid).num++;
-          ad.total_size += item.size;
-          ad.total_num++;
-
-          total_num++;
-          total_size += item.size;
         }
-      }
-    });
+      });
 
-    //trace(allocs);
-    var y:Float = 0;
-    var ping = true;
-    for (type in allocs.keys()) {
-      var ad = allocs.get(type);
+      //trace(allocs);
+      var y:Float = 0;
+      var ping = true;
+      for (type in allocs.keys()) {
+        var ad = allocs.get(type);
 
-      // type name formatting
-      if (type.substr(0,7)=='[object') type = type.substr(8, type.length-9);
-      if (type.substr(0,6)=='[class') type = type.substr(7, type.length-8);
-      type = (~/\$$/).replace(type, ' <static>');
-      var clo = type.indexOf('::');
-      if (clo>=0) {
-        type = 'Closure ['+type.substr(clo+2)+' ('+type.substr(0,clo)+')]';
-      }
-
-      var lbl = Util.make_label(type, 12, 0x227788);
-      var cont = new Sprite();
-      cont.y = y;
-      cont.x = 15;
-      cont.addChild(lbl);
-      alloc_pane.cont.addChild(cont);
-
-      inline function draw_pct(cont, val:Int, total:Int, offset:Float) {
-        var unit:Int = Math.floor(val*100/total);
-
-        var num = Util.make_label((val==0)?"< 1" : Util.add_commas(val), 12, 0xeeeeee);
-        num.x = offset - 70 - num.width;
-        cont.addChild(num);
-
-        var numpctunit = Util.make_label(unit+" %", 12, 0xeeeeee);
-        numpctunit.x = offset - 25 - numpctunit.width;
-        cont.addChild(numpctunit);
-      }
-      draw_pct(cont, ad.total_num, total_num, alloc_pane.innerWidth-120);
-      draw_pct(cont, Math.round(ad.total_size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10);
-
-      // TODO: background graphics on special shape
-      //ping = !ping;
-      //if (ping) {
-      //  alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
-      //  alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,lbl.height);
-      //}
-
-      y += lbl.height;
-
-      // stacks (bottom-up objects)
-      var stackids:Array<String> = new Array<String>();
-      var k = ad.per_stack_map.keys();
-      while (k.hasNext()) stackids.push(k.next());
-
-      if (stackids.length>0) {
-        Util.add_collapse_button(cont, lbl, false, alloc_pane.invalidate_scrollbars);
-      }
-
-      //trace(type+":");
-      //trace("num: "+ad.total_num+", size:"+ad.total_size);
-      for (stackid in stackids) {
-        var psm = ad.per_stack_map.get(stackid);
-        trace(psm);
-        var id = Std.parseInt(stackid);
-        var callstack:Array<Int> = session.stack_maps[id];
-        var last_cont:Sprite = null;
-        for (i in 0...callstack.length) {
-          var stack = Util.make_label(session.stack_strings[callstack[i]], 12, 0x66aadd);
-          var cont = new Sprite();
-          cont.addChild(stack);
-          cont.x = 30+15*i;
-          cont.y = y;
-          alloc_pane.cont.addChild(cont);
-
-          if (i<callstack.length-1) Util.add_collapse_button(cont, stack, false, alloc_pane.invalidate_scrollbars);
-
-          draw_pct(cont, psm.num, total_num, alloc_pane.innerWidth-120-cont.x+15);
-          draw_pct(cont, Math.round(psm.size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10-cont.x+15);
-
-          //ping = !ping;
-          //if (ping) {
-          //  alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
-          //  alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,stack.height);
-          //}
-          last_cont = cont;
-          y += stack.height;
+        // type name formatting
+        if (type.substr(0,7)=='[object') type = type.substr(8, type.length-9);
+        if (type.substr(0,6)=='[class') type = type.substr(7, type.length-8);
+        type = (~/\$$/).replace(type, ' <static>');
+        var clo = type.indexOf('::');
+        if (clo>=0) {
+          type = 'Closure ['+type.substr(clo+2)+' ('+type.substr(0,clo)+')]';
         }
-      }
 
+        var lbl = Util.make_label(type, 12, 0x227788);
+        var cont = new Sprite();
+        cont.y = y;
+        cont.x = 15;
+        cont.addChild(lbl);
+        alloc_pane.cont.addChild(cont);
+
+        inline function draw_pct(cont, val:Int, total:Int, offset:Float) {
+          var unit:Int = Math.floor(val*100/total);
+
+          var num = Util.make_label((val==0)?"< 1" : Util.add_commas(val), 12, 0xeeeeee);
+          num.x = offset - 70 - num.width;
+          cont.addChild(num);
+
+          var numpctunit = Util.make_label(unit+" %", 12, 0xeeeeee);
+          numpctunit.x = offset - 25 - numpctunit.width;
+          cont.addChild(numpctunit);
+        }
+        draw_pct(cont, ad.total_num, total_num, alloc_pane.innerWidth-120);
+        draw_pct(cont, Math.round(ad.total_size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10);
+
+        // TODO: background graphics on special shape
+        //ping = !ping;
+        //if (ping) {
+        //  alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
+        //  alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,lbl.height);
+        //}
+
+        y += lbl.height;
+
+        // stacks (bottom-up objects)
+        var stackids:Array<String> = new Array<String>();
+        var k = ad.per_stack_map.keys();
+        while (k.hasNext()) stackids.push(k.next());
+
+        if (stackids.length>0) {
+          Util.add_collapse_button(cont, lbl, false, alloc_pane.invalidate_scrollbars);
+        }
+
+        //trace(type+":");
+        //trace("num: "+ad.total_num+", size:"+ad.total_size);
+        for (stackid in stackids) {
+          var psm = ad.per_stack_map.get(stackid);
+          trace(psm);
+          var id = Std.parseInt(stackid);
+          var callstack:Array<Int> = session.stack_maps[id];
+          var last_cont:Sprite = null;
+          for (i in 0...callstack.length) {
+            var stack = Util.make_label(session.stack_strings[callstack[i]], 12, 0x66aadd);
+            var cont = new Sprite();
+            cont.addChild(stack);
+            cont.x = 30+15*i;
+            cont.y = y;
+            alloc_pane.cont.addChild(cont);
+
+            if (i<callstack.length-1) Util.add_collapse_button(cont, stack, false, alloc_pane.invalidate_scrollbars);
+
+            draw_pct(cont, psm.num, total_num, alloc_pane.innerWidth-120-cont.x+15);
+            draw_pct(cont, Math.round(psm.size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10-cont.x+15);
+
+            //ping = !ping;
+            //if (ping) {
+            //  alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
+            //  alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,stack.height);
+            //}
+            last_cont = cont;
+            y += stack.height;
+          }
+        }
+
+      }
     }
 
   }
@@ -1237,12 +1270,12 @@ class DetailUI {
   private var plbl:openfl.text.TextField;
   private var albl:openfl.text.TextField;
 
-  public function new (detail_pane, sample_pane, alloc_pane):Void
+  public function new (detail_pane, sample_pane, alloc_pane, sel_ctrl):Void
   {
     this.detail_pane = detail_pane;
     this.sample_pane = sample_pane;
     this.alloc_pane = alloc_pane;
-
+    this.sel_ctrl = sel_ctrl;
 
     var profiler = Util.make_label("Profiler", 12);
     profiler.filters = [Util.TEXT_SHADOW];
@@ -1289,6 +1322,10 @@ class DetailUI {
     }
   }
 
+  public var sel_index(get, set):Int;
+  public function get_sel_index():Int { return sample_pane.visible ? 0 : 1; }
+  public function set_sel_index(val:Int):Int { select(val==0 ? pcont : acont); return val; }
+
   private function select(tgt:Sprite):Void
   {
     var highlight_on = new openfl.geom.ColorTransform(1,1.02,1.04,1,0,0,0);
@@ -1304,6 +1341,8 @@ class DetailUI {
     // openfl bug /w set colortransform / cached textfields?
     pcont.getChildAt(0).alpha = 1;
     acont.getChildAt(0).alpha = 1;
+
+    sel_ctrl.redraw();
   }
 
   public function resize():Void

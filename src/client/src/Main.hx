@@ -848,7 +848,7 @@ class SelectionController {
     selection.stage.addEventListener(MouseEvent.MOUSE_MOVE, handle_select_move);
     selection.stage.addEventListener(MouseEvent.MOUSE_UP, handle_select_stop);
 
-    select_at(timing_pane.cont.mouseX, !cast(e).shiftKey);
+    select_at(Math.max(layout.frame_width/2, timing_pane.cont.mouseX), !cast(e).shiftKey);
   }
 
   function handle_select_stop(e:Event)
@@ -859,7 +859,7 @@ class SelectionController {
 
   function handle_select_move(e:Event)
   {
-    select_at(timing_pane.cont.mouseX, false);
+    select_at(Math.max(layout.frame_width/2, timing_pane.cont.mouseX), false);
   }
 
   function select_at(x:Float, start_selection:Bool=true)

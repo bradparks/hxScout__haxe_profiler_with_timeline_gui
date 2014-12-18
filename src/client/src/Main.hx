@@ -381,7 +381,7 @@ class HXScoutClientGUI extends Sprite
     detail_pane.cont.addChild(sample_pane);
 
     sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, summary_pane, layout, get_active_session);
-    nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane, sel_ctrl, function() { return layout.frame_width/nav_scalex; });
+    nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane, sel_ctrl, get_active_session, function() { return layout.frame_width/nav_scalex; });
     detail_ui = new DetailUI(detail_pane, sample_pane, alloc_pane, sel_ctrl);
 
     addEventListener(Event.ENTER_FRAME, on_enter_frame);
@@ -422,7 +422,10 @@ class HXScoutClientGUI extends Sprite
     resize_pane(0, 0, sample_pane,  0, 20, detail_pane.innerWidth, detail_pane.innerHeight-20);
     resize_pane(0, 0, alloc_pane,  0, 20, detail_pane.innerWidth, detail_pane.innerHeight-20);
 
-    if (stage!=null) sel_ctrl.redraw();
+    if (stage!=null) {
+      sel_ctrl.redraw();
+      //nav_ctrl.redraw();
+    }
     detail_ui.resize();
   }
 
@@ -630,6 +633,7 @@ class HXScoutClientGUI extends Sprite
       cast(nav_pane.cont.getChildAt(0)).bitmapData.dispose();
       cast(nav_pane.cont.getChildAt(0)).bitmapData = bd;
       nav_scalex *= rescale;
+      //nav_ctrl.redraw();
     }
   }
 
@@ -660,19 +664,22 @@ class NavController {
   private var memory_pane:Pane;
   private var sel_ctrl:SelectionController;
   private var get_nav_factor:Void->Float;
+  private var get_active_session:Void->FLMSession;
 
   public var timing_scaley:Float = 1.0;
   public var memory_scaley:Float = 1.0;
 
-  public function new (nav_pane, timing_pane, memory_pane, sel_ctrl, get_nav_factor):Void
+  public function new (nav_pane, timing_pane, memory_pane, sel_ctrl, get_active_session, get_nav_factor):Void
   {
     this.nav_pane = nav_pane;
     this.timing_pane = timing_pane;
     this.memory_pane = memory_pane;
     this.sel_ctrl = sel_ctrl;
     this.get_nav_factor = get_nav_factor;
+    this.get_active_session = get_active_session;
 
     AEL.add(nav_pane, MouseEvent.MOUSE_DOWN, handle_nav_start);
+    AEL.add(nav_pane, Event.ENTER_FRAME, redraw);
 
     AEL.add(timing_pane, MouseEvent.MOUSE_WHEEL, handle_zoom);
     AEL.add(memory_pane, MouseEvent.MOUSE_WHEEL, handle_zoom);
@@ -712,12 +719,15 @@ class NavController {
 
   function handle_nav_move(e:Event)
   {
-    nav_to(nav_pane.mouseX);
+    nav_to(nav_pane.cont.mouseX);
   }
 
   function nav_to(x:Float)
   {
     //trace("Nav to: "+x);
+    var w = timing_pane.innerWidth/get_nav_factor();
+    x -= w/2;
+    if (x<0) x=0;
     timing_pane.cont.scrollRect.x = -x;
 
     var r = new flash.geom.Rectangle();
@@ -726,7 +736,50 @@ class NavController {
     timing_pane.cont.scrollRect = r;
     memory_pane.cont.scrollRect = r;
 
+    //redraw();
+
     sel_ctrl.redraw();
+  }
+
+  function redraw(e:Event=null):Void
+  {
+    var g = nav_pane.scrollbars.graphics;
+    var x = timing_pane.cont.scrollRect.x/get_nav_factor()+timing_pane.cont.x;
+    var w = timing_pane.innerWidth/get_nav_factor();
+    g.clear();
+
+    if (get_active_session()==null) return;
+
+    g.lineStyle(1, 0xeeeeee, 0.2);
+    g.beginFill(0xeeeeee, 0.05);
+    g.drawRect(x, 4, w, nav_pane.height-8);
+    g.endFill();
+
+    g.lineStyle(2, 0xeeeeee, 0.4);
+    g.moveTo(x+3, 4);
+    g.lineTo(x, 4);
+    g.lineTo(x, nav_pane.height-4);
+    g.lineTo(x+3, nav_pane.height-4);
+    g.moveTo(w+x-3, 4);
+    g.lineTo(w+x, 4);
+    g.lineTo(w+x, nav_pane.height-4);
+    g.lineTo(w+x-3, nav_pane.height-4);
+
+    if (sel_ctrl.start_sel>0) {
+      var x0:Float = sel_ctrl.start_sel;
+      var x1:Float = sel_ctrl.end_sel;
+      if (x1<1) x1 = 1;
+      if (x0<1) x0 = 1;
+      x0 = x0*6/*layout.frame_width*/ / get_nav_factor() + timing_pane.cont.x;
+      x1 = x1*6/*layout.frame_width*/ / get_nav_factor() + timing_pane.cont.x;
+      if (x0>x1) {
+        var t = x0;
+        x0 = x1;
+        x1 = t;
+      }
+      g.beginFill(0xeeeeee, 0.1);
+      g.drawRect(x0, 8, x1-x0, nav_pane.height-14);
+    }
   }
 }
 
@@ -771,7 +824,7 @@ class SelectionController {
   function handle_key(ev:Event)
   {
     var e = cast(ev, KeyboardEvent);
-    trace(e.keyCode);
+    //trace(e.keyCode);
     var session:FLMSession = get_active_session();
     if (e.keyCode==39) { // right
       if (end_sel>=session.frames.length || (!e.shiftKey && start_sel>=session.frames.length)) return;
@@ -1361,7 +1414,7 @@ class Pane extends Sprite {
 
   public var cont(get, null):Sprite;
   var backdrop:Shape;
-  var scrollbars:Shape;
+  public var scrollbars:Shape;
 
   var _width:Float;
   var _height:Float;
@@ -1452,8 +1505,7 @@ class Pane extends Sprite {
     var rect = cont.scrollRect;
     var bounds = cont.getBounds(cont);
 
-    if (_scrollbary) trace(bounds);
-    scrollbars.graphics.clear();
+    if (_scrollbary || _scrollbarx) scrollbars.graphics.clear();
     if (_scrollbary && rect.height<bounds.height) {
       scrollbars.graphics.lineStyle(1, 0x0,0.2);
       scrollbars.graphics.beginFill(0xffffff,0.2);

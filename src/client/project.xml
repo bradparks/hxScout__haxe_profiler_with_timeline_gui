@@ -3,13 +3,20 @@
 
   <meta title="hxScout" package="com.jcward.hxscout.gui" version="1.0.0" company="Jeff Ward" />
   <app main="Main" path="export" file="GUI" />
-  <window width="1280" height="1024" background="#333333" resizable="true" fps="60" hardware="true" vsync="false"  />
+  <window width="1280" height="1024" background="#333333" resizable="true" fps="30" hardware="true" vsync="false"  />
 
   <source path="src" />
   <source path="lib" />
 
+  <!-- for CPP server-in-client -->
+  <source path="../server" />
+  <source path="../../lib" />
+
   <haxelib name="openfl" />
   <haxelib name="actuate" />
+
+  <!-- <haxedef name="HXCPP_STACK_TRACE" /> -->
+  <haxeflag name="-D advanced-telemetry" if="flash" />
 
   <assets path="assets" rename="assets" exclude="*.svg" />
   <icon path="assets/openfl.svg" />

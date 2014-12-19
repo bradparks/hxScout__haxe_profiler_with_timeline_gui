@@ -7,6 +7,7 @@ import amf.Types;
 
 
 class Amf3Reader {	
+	public var decodedBytes: Array<String>;
 	public var decodedStrings: Array<String>;
 	public var decodedObjects: Array<Dynamic>;
 	public var decodedClassDefs: Array<ClassDef>;
@@ -15,6 +16,7 @@ class Amf3Reader {
 	public function new(i: haxe.io.Input) {
 		input = i;
 		input.bigEndian = true;
+    decodedBytes = [];
 		decodedStrings = [];
 		decodedObjects = [];
 		decodedClassDefs = [];
@@ -76,7 +78,7 @@ class Amf3Reader {
   }
 
 	private function readAmf3ByteArray() {
-		var data = readAmf3String();		
+		var data = readAmf3String(decodedBytes);
 		//return Bytes.ofData(BytesData.ofString(data));
 		return Bytes.ofString(data);
 		//return haxe.io.Bytes.ofData(NativeString.ofString(data));
@@ -88,34 +90,43 @@ class Amf3Reader {
 		return flag & 1 == 0 ? Date.fromTime(input.readDouble())
 			: cast decodedObjects[flag >> 1];
 	}
-	
+
 	/**
 	 * a String is encoded in UTF format
 	 */
-	private function readAmf3String(): String {
+	private function readAmf3String(cache:Array<String>=null): String {
 		var strref = readAmf3Int();
-		
+		if (cache==null) cache = decodedStrings;
+
 		var result = "";
 		if (strref & 0x01 == 0) {
 			strref = strref >> 1;
 			
-			if (strref >= decodedStrings.length) {
+			if (strref >= cache.length) {
 				throw "Undefined String reference";
 			}
 
 		
-			result = decodedStrings[strref];
+			result = cache[strref];
 		} else {
 			var length = strref >> 1;
 			
 			if (length > 0) {
 				result = input.read(length).toString();
-				decodedStrings.push(result);
+				cache.push(result);
 			}
 		}
 
-    //trace(" -- reading String: "+result);
-		
+    //if (result.indexOf(String.fromCharCode(0))>=0) {
+    //  var bytes = haxe.io.Bytes.ofString(result);
+		//  var msg = "";
+		//  for (i in 0...bytes.length) {
+		//  	var b = bytes.get(i);
+		//  	if (b>=32 && b<=126) msg += String.fromCharCode(b); else msg += "%"+StringTools.hex(b, 2);
+		//  }
+    //  trace(" -- reading NTString: "+msg);
+		//}
+
 		return result;
 	}
 
@@ -300,7 +311,7 @@ class Amf3Reader {
         var attribute_count = class_type >> 3;
         var class_name = readAmf3String();
 
-        //trace(" -- read class name: "+class_name+" with attrib count "+attribute_count);
+        //trace(" -- read "+(externalizable?'':'non-')+"externalizable class name: "+class_name+" with attrib count "+attribute_count);
 
         var class_attributes = [];
         for (i in 0...attribute_count) { class_attributes.push(readAmf3String()); } // Read class members

@@ -22,26 +22,27 @@ class Main extends Sprite {
 
     //cpp.vm.Profiler.start(); // requires HXCPP_STACK_TRACE in project.xml
 
-    function on_server_connected(s:Socket) {
-      trace("Got socket: "+s);
-      addChildAt(gui = new HXScoutClientGUI(), 0);
-      center();
-      setup_frame_data_receiver(s);
-    }
-
-    // CPP, start server thread automatically, failover to request
     #if cpp
-      var listener = cpp.vm.Thread.create(Server.main);
-      var s:Socket = null;
-      Sys.sleep(0.2);
-      s = setup_socket("localhost", 7933,
-                       function() {
-                         on_server_connected(s);
-                       },
-                       function() {
-                         ui_server_request(on_server_connected);
-                       });
+      setup_flm_listener();
+      // CPP, start server thread automatically, failover to request
+      //var listener = cpp.vm.Thread.create(Server.main);
+      //var s:Socket = null;
+      //Sys.sleep(0.2);
+      //s = setup_socket("localhost", 7933,
+      //                 function() {
+      //                   on_server_connected(s);
+      //                 },
+      //                 function() {
+      //                   ui_server_request(on_server_connected);
+      //                 });
     #else
+      function on_server_connected(s:Socket) {
+        trace("Got socket: "+s);
+        addChildAt(gui = new HXScoutClientGUI(), 0);
+        center();
+        setup_frame_data_receiver(s);
+      }
+
       ui_server_request(on_server_connected);
     #end
 
@@ -147,16 +148,7 @@ class Main extends Sprite {
         if (server.bytesAvailable>=frame_data_length && frame_data_length>0) {
           var frame_data = haxe.Json.parse(server.readUTFBytes(frame_data_length));
           frame_data_length = 0;
-          //trace(frame_data);
-          var inst_id:String = frame_data.inst_id;
-          if (!flm_sessions.exists(inst_id)) {
-            flm_sessions.set(inst_id, new FLMSession(inst_id));
-            gui.add_session(flm_sessions.get(inst_id));
-          }
-          flm_sessions.get(inst_id).receive_frame_data(frame_data);
-          if (frame_data.session_name!=null) {
-            gui.update_name(frame_data.session_name, frame_data.inst_id);
-          }
+          send_frame_data(frame_data);
         } else {
           break;
         }
@@ -166,6 +158,42 @@ class Main extends Sprite {
     stage.addEventListener(Event.ENTER_FRAME, on_enter_frame);
   }
 
+#if cpp
+  function setup_flm_listener() {
+    addChildAt(gui = new HXScoutClientGUI(), 0);
+    center();
+
+    var listener = cpp.vm.Thread.create(FLMListener.start);
+    listener.sendMessage(cpp.vm.Thread.current());
+
+    function on_enter_frame(e:Event):Void
+    {
+      var frame_data;
+      while (true) {
+        frame_data = cpp.vm.Thread.readMessage(false);
+        if (frame_data==null) break;
+        // TODO: remove JSON for non-socket
+        send_frame_data(haxe.Json.parse(frame_data));
+      }
+    }
+
+    stage.addEventListener(Event.ENTER_FRAME, on_enter_frame);
+  }
+#end
+
+  function send_frame_data(frame_data):Void
+  {
+    //trace(frame_data);
+    var inst_id:String = frame_data.inst_id;
+    if (!flm_sessions.exists(inst_id)) {
+      flm_sessions.set(inst_id, new FLMSession(inst_id));
+      gui.add_session(flm_sessions.get(inst_id));
+    }
+    flm_sessions.get(inst_id).receive_frame_data(frame_data);
+    if (frame_data.session_name!=null) {
+      gui.update_name(frame_data.session_name, frame_data.inst_id);
+    }
+  }
 }
 
 class SampleData {

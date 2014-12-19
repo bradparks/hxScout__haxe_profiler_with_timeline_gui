@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project>
+
+  <meta title="hxScout" package="com.jcward.hxscout.gui" version="1.0.0" company="Jeff Ward" />
+  <app main="Main" path="export" file="hxscout" />
+  <window width="480" height="360" background="#eeeeee" resizable="false" fps="30" hardware="true" borderless="true" vsync="false"  />
+
+  <source path="src" />
+  <source path="lib" />
+
+  <haxelib name="openfl" />
+
+  <!-- <haxedef name="HXCPP_STACK_TRACE" /> -->
+
+  <assets path="assets" rename="assets" exclude="*.svg" />
+  <icon path="assets/hxscout.svg" />
+
+</project>

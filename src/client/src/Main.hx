@@ -1347,7 +1347,7 @@ class SelectionController {
         //trace("num: "+ad.total_num+", size:"+ad.total_size);
         for (stackid in stackids) {
           var psm = ad.per_stack_map.get(stackid);
-          trace(psm);
+          //trace(psm);
           var id = Std.parseInt(stackid);
           var callstack:Array<Int> = session.stack_maps[id];
           var last_cont:Sprite = null;

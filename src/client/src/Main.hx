@@ -409,7 +409,7 @@ class HXScoutClientGUI extends Sprite
     detail_pane.cont.addChild(sample_pane);
 
     sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, summary_pane, layout, get_active_session);
-    nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane, sel_ctrl, get_active_session, function() { return layout.frame_width/nav_scalex; });
+    nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane, sel_ctrl, layout, get_active_session, function() { return layout.frame_width/nav_scalex; }, function() { var tmp = active_session; set_active_session(-1); set_active_session(tmp); });
     detail_ui = new DetailUI(detail_pane, sample_pane, alloc_pane, sel_ctrl);
 
     addEventListener(Event.ENTER_FRAME, on_enter_frame);
@@ -431,7 +431,7 @@ class HXScoutClientGUI extends Sprite
     summary:{
       width:300,
     },
-    frame_width:6,
+    frame_width:5,
     mscale:200
   }
 
@@ -693,34 +693,65 @@ class NavController {
   private var sel_ctrl:SelectionController;
   private var get_nav_factor:Void->Float;
   private var get_active_session:Void->FLMSession;
+  private var layout:Dynamic;
+  private var on_change_layout:Void->Void;
 
   public var timing_scaley:Float = 1.0;
   public var memory_scaley:Float = 1.0;
+  public var following:Bool = true;
 
-  public function new (nav_pane, timing_pane, memory_pane, sel_ctrl, get_active_session, get_nav_factor):Void
+  public function new (nav_pane, timing_pane, memory_pane, sel_ctrl, layout, get_active_session, get_nav_factor, on_change_layout):Void
   {
     this.nav_pane = nav_pane;
     this.timing_pane = timing_pane;
     this.memory_pane = memory_pane;
     this.sel_ctrl = sel_ctrl;
+    this.layout = layout;
     this.get_nav_factor = get_nav_factor;
     this.get_active_session = get_active_session;
+    this.on_change_layout = on_change_layout;
 
     AEL.add(nav_pane, MouseEvent.MOUSE_DOWN, handle_nav_start);
     AEL.add(nav_pane, Event.ENTER_FRAME, redraw);
+    AEL.add(Util.stage, KeyboardEvent.KEY_DOWN, handle_key);
 
     AEL.add(timing_pane, MouseEvent.MOUSE_WHEEL, handle_zoom);
     AEL.add(memory_pane, MouseEvent.MOUSE_WHEEL, handle_zoom);
+    AEL.add(timing_pane, MouseEvent.CLICK, handle_unfollow);
+    AEL.add(memory_pane, MouseEvent.CLICK, handle_unfollow);
   }
 
-  private function handle_zoom(e:Event):Void {
+  function handle_unfollow(e:Event) { following = false; }
+
+  function handle_key(ev:Event)
+  {
+    var e = cast(ev, KeyboardEvent);
+    //trace(e.keyCode);
+    var session:FLMSession = get_active_session();
+    if ((e.keyCode==39 && e.ctrlKey) || e.keyCode==35) { // ctrl-right or end
+      following = true;
+    }
+    if ((e.keyCode==37 && e.ctrlKey) || e.keyCode==36) { // ctrl-left or home
+      nav_to(0);
+    }
+  }
+
+  private function handle_zoom(ev:Event):Void {
+    var e:MouseEvent = cast(ev);
+    if (e.shiftKey) {
+      layout.frame_width += (e.delta>0) ? 1 : -1;
+      layout.frame_width = Math.max(2, Math.min(8, layout.frame_width));
+      on_change_layout();
+      return;
+    }
+
     // Do it this way because selection graphic is part of memory pane, so
     // e.target doesn't work.
     var p = new flash.geom.Point(timing_pane.stage.mouseX, timing_pane.stage.mouseY);
     var tp = timing_pane.globalToLocal(p);
     var pane = (tp.y>0 && tp.y<timing_pane.height) ? timing_pane : memory_pane;
 
-    var shrink = cast(e).delta<0;
+    var shrink = e.delta<0;
 
     if (pane==timing_pane) timing_scaley *= shrink ? 0.8 : 1.2;
     if (pane==memory_pane) memory_scaley *= shrink ? 0.8 : 1.2;
@@ -752,6 +783,8 @@ class NavController {
 
   function nav_to(x:Float)
   {
+    following = false;
+
     //trace("Nav to: "+x);
     var w = timing_pane.innerWidth/get_nav_factor();
     x -= w/2;
@@ -771,6 +804,13 @@ class NavController {
 
   function redraw(e:Event=null):Void
   {
+    if (following && get_active_session()!=null) {
+      var session = get_active_session();
+      var w = timing_pane.innerWidth/get_nav_factor();      
+      nav_to(session.frames.length/get_nav_factor()*layout.frame_width-w/2);
+      following = true;
+    }
+
     var g = nav_pane.scrollbars.graphics;
     var x = timing_pane.cont.scrollRect.x/get_nav_factor()+timing_pane.cont.x;
     var w = timing_pane.innerWidth/get_nav_factor();
@@ -798,8 +838,8 @@ class NavController {
       var x1:Float = sel_ctrl.end_sel;
       if (x1<1) x1 = 1;
       if (x0<1) x0 = 1;
-      x0 = x0*6/*layout.frame_width*/ / get_nav_factor() + timing_pane.cont.x;
-      x1 = x1*6/*layout.frame_width*/ / get_nav_factor() + timing_pane.cont.x;
+      x0 = x0*layout.frame_width / get_nav_factor() + timing_pane.cont.x;
+      x1 = x1*layout.frame_width / get_nav_factor() + timing_pane.cont.x;
       if (x0>x1) {
         var t = x0;
         x0 = x1;
@@ -854,15 +894,17 @@ class SelectionController {
     var e = cast(ev, KeyboardEvent);
     //trace(e.keyCode);
     var session:FLMSession = get_active_session();
-    if (e.keyCode==39) { // right
+    if (e.keyCode==39 || e.keyCode==35) { // right or end
       if (end_sel>=session.frames.length || (!e.shiftKey && start_sel>=session.frames.length)) return;
       if (!e.shiftKey) start_sel++;
       end_sel++;
+      if ((e.ctrlKey || e.keyCode==35) && e.shiftKey) end_sel = session.frames.length;
       redraw();
-    } else if (e.keyCode==37) { // left
+    } else if (e.keyCode==37 || e.keyCode==36) { // left or home
       if ((start_sel<2 && !e.shiftKey) || end_sel<2) return;
       if (!e.shiftKey) start_sel--;
       end_sel--;
+      if ((e.ctrlKey || e.keyCode==36) && e.shiftKey) start_sel = 1;
       redraw();
     } else if (e.keyCode==65 && e.ctrlKey) { // ctrl-a
       start_sel = 1;
@@ -938,9 +980,6 @@ class SelectionController {
     if (!invalid) return;
     invalid = false;
 
-    var start = Std.int(Math.min(start_sel, end_sel));
-    var end = Std.int(Math.max(start_sel, end_sel));
-
     selection.graphics.clear();
     while (sample_pane.cont.numChildren>0) sample_pane.cont.removeChildAt(0);
     sample_pane.cont.graphics.clear();
@@ -952,6 +991,8 @@ class SelectionController {
     var session:FLMSession = get_active_session();
     if (session==null) return;
 
+    var start = Std.int(Math.min(start_sel, end_sel));
+    var end = Std.int(Math.max(start_sel, end_sel));
     if (start<1) start=1;
     if (end>session.frames.length) end = session.frames.length;
 

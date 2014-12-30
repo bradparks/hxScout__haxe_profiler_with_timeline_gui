@@ -6,7 +6,7 @@ import flash.events.*;
 @:bitmap("assets/splash.png") class Splash extends BitmapData {}
 
 class Main extends Sprite {
-  
+
   public function new()
   {
     super();
@@ -14,18 +14,30 @@ class Main extends Sprite {
     var bitmap = new Bitmap(new Splash(0,0));
     addChild(bitmap);
 
+    var t = new flash.text.TextField();
+    var format = new flash.text.TextFormat("Courier", 12, 0x111111);
+    format.align = openfl.text.TextFormatAlign.CENTER;
+    t.defaultTextFormat = format;
+    t.text = Build.git_rev();
+    t.width = t.textWidth*1.1;
+    t.x = 210 - t.width/2;
+    t.y = 186;
+    addChild(t);
+
     // if (Sys.args().indexOf("-nosplash")<0) {
     // var p = new sys.io.Process(Sys.getCwd()+"GUI", ["-nosplash"]);
 
-    haxe.Timer.delay(function():Void {
+    function go():Void {
 #if win
-        var code = Sys.command("START /B GUI");
+      var code = Sys.command("START /B GUI");
 #else
-        var code = Sys.command(Sys.getCwd()+"GUI &");
+      var code = Sys.command(Sys.getCwd()+"GUI &");
 #end
-        Sys.exit(0);
+      Sys.exit(0);
+    }
 
-    }, 2000);
+    haxe.Timer.delay(go, 2500);
+    addEventListener(flash.events.MouseEvent.CLICK, function(e:Event) { go(); });
     return;
   }
 }

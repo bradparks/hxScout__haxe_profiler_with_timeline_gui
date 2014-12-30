@@ -894,6 +894,7 @@ class SelectionController {
     var e = cast(ev, KeyboardEvent);
     //trace(e.keyCode);
     var session:FLMSession = get_active_session();
+    if (e.ctrlKey && !e.shiftKey) return;
     if (e.keyCode==39 || e.keyCode==35) { // right or end
       if (end_sel>=session.frames.length || (!e.shiftKey && start_sel>=session.frames.length)) return;
       if (!e.shiftKey) start_sel++;
@@ -1348,29 +1349,33 @@ class SelectionController {
         for (stackid in stackids) {
           var psm = ad.per_stack_map.get(stackid);
           //trace(psm);
-          var id = Std.parseInt(stackid);
+          var id = Std.parseInt(stackid)-1;
           var callstack:Array<Int> = session.stack_maps[id];
-          var last_cont:Sprite = null;
-          for (i in 0...callstack.length) {
-            var stack = Util.make_label(session.stack_strings[callstack[i]], 12, 0x66aadd);
-            var cont = new Sprite();
-            cont.addChild(stack);
-            cont.x = 30+15*i;
-            cont.y = y;
-            alloc_pane.cont.addChild(cont);
-
-            if (i<callstack.length-1) Util.add_collapse_button(cont, stack, false, alloc_pane.invalidate_scrollbars);
-
-            draw_pct(cont, psm.num, total_num, alloc_pane.innerWidth-120-cont.x+15);
-            draw_pct(cont, Math.round(psm.size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10-cont.x+15);
-
-            //ping = !ping;
-            //if (ping) {
-            //  alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
-            //  alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,stack.height);
-            //}
-            last_cont = cont;
-            y += stack.height;
+          if (callstack==null) {
+            if (stackids.length>1 || type.indexOf('Event')<0) {
+              trace("ERROR - callstack for alloc of "+type+", id="+id+" out of range of length="+session.stack_maps.length);
+            }
+          } else {
+            for (i in 0...callstack.length) {
+              var stack = Util.make_label(session.stack_strings[callstack[i]], 12, 0x66aadd);
+              var cont = new Sprite();
+              cont.addChild(stack);
+              cont.x = 30+15*i;
+              cont.y = y;
+              alloc_pane.cont.addChild(cont);
+   
+              if (i<callstack.length-1) Util.add_collapse_button(cont, stack, false, alloc_pane.invalidate_scrollbars);
+   
+              draw_pct(cont, psm.num, total_num, alloc_pane.innerWidth-120-cont.x+15);
+              draw_pct(cont, Math.round(psm.size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10-cont.x+15);
+   
+              //ping = !ping;
+              //if (ping) {
+              //  alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
+              //  alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,stack.height);
+              //}
+              y += stack.height;
+            }
           }
         }
 
@@ -1545,10 +1550,10 @@ class Pane extends Sprite {
     var r = cont.scrollRect;
     // TODO: bottom_aligned support?, +=h laster, -=h
     if (_scrollbary) {
-      r.y += (cast(e).delta<0) ? 15 : -15;
+      r.y += (cast(e).delta<0) ? 25 : -25;
       limit_scrolly(r);
     } else if (_scrollbarx) {
-      r.x += (cast(e).delta<0) ? 15 : -15;
+      r.x += (cast(e).delta<0) ? 25 : -25;
       limit_scrollx(r);
     }
     cont.scrollRect = r;

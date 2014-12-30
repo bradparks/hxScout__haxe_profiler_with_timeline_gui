@@ -18,7 +18,7 @@ package
       setTimeout(function():void {
         trace("Goodbye!");
         NativeApplication.nativeApplication.exit();
-      }, 500);
+      }, 5000);
 
       // Alloc on each frame, 10x the frame number
       var frame:int = 0;
@@ -26,11 +26,10 @@ package
                              function():void {
                                frame++;
 
-                               for (var i:int=0; i<frame*10; i++) {
-                                 var obj = { "a":Math.random() };
-                                 refs.push(obj);
-                               }
-                               if (frame%10==0) refs.length = 0; // release!
+                               if (frame%15==5) SomeClass.foo_a();
+                               if (frame%15==10) SomeClass.foo_b();
+                               if (frame%15==0) SomeClass.clear();
+
                              });
 
     }

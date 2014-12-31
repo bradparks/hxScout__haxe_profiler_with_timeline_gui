@@ -2,7 +2,7 @@
 <project>
 
   <meta title="hxScout" package="com.jcward.hxscout.gui" version="1.0.0" company="Jeff Ward" />
-  <app main="Main" path="export" file="hxscout" />
+  <app main="Main" path="export" file="hxScoutSplash" />
   <window width="590" height="600" background="#333333" resizable="false" fps="30" hardware="true" borderless="true" vsync="false"  />
 
   <source path="src" />
@@ -12,7 +12,7 @@
 
   <!-- <haxedef name="HXCPP_STACK_TRACE" /> -->
 
-  <assets path="assets" rename="assets" exclude="*.svg" />
+  <assets path="assets" rename="assets" exclude="*" />
   <icon path="assets/hxScout.svg" />
 
 </project>

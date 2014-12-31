@@ -28,9 +28,9 @@ class Main extends Sprite {
     function go(e:Event=null):Void {
       removeEventListener(flash.events.MouseEvent.CLICK, go);
 #if win
-      var code = Sys.command("START /B GUI");
+      var code = Sys.command("START /B hxScoutMain");
 #else
-      var code = Sys.command(Sys.getCwd()+"GUI &");
+      var code = Sys.command(Sys.getCwd()+"hxScoutMain &");
 #end
       haxe.Timer.delay(function() { Sys.exit(0); }, e==null ? 250 : 1);
     }

@@ -40,7 +40,6 @@ class FLMListener {
     var frames:Array<Frame> = [];
     var cur_frame = new Frame(0, inst_id);
     var delta:Int = 0;
-    var first_enter = true;
     var next_is_as = false;
     var stack_strings:Array<String> = ["1-indexed"];
 
@@ -238,16 +237,12 @@ class FLMListener {
         }
 
         if (data['name']==".enter") {
-          if (first_enter) {
-            first_enter = false;
-          } else {
-            var offset = cur_frame.offset + cur_frame.duration.total;
-            cur_frame.timing = null; // release timing events
-            //Sys.stdout().writeString(cur_frame.to_json()+",\n");
-            client_writer.sendMessage(cur_frame.to_json());
-            frames.push(cur_frame);
-            cur_frame = new Frame(cur_frame.id+1, inst_id, offset);
-          }
+          var offset = cur_frame.offset + cur_frame.duration.total;
+          cur_frame.timing = null; // release timing events
+          //Sys.stdout().writeString(cur_frame.to_json()+",\n");
+          client_writer.sendMessage(cur_frame.to_json());
+          frames.push(cur_frame);
+          cur_frame = new Frame(cur_frame.id+1, inst_id, offset);
         }
       }
     }

@@ -3,7 +3,7 @@
 
   <meta title="hxScout" package="com.jcward.hxscout.gui" version="1.0.0" company="Jeff Ward" />
   <app main="Main" path="export" file="hxscout" />
-  <window width="480" height="360" background="#eeeeee" resizable="false" fps="30" hardware="true" borderless="true" vsync="false"  />
+  <window width="590" height="600" background="#333333" resizable="false" fps="30" hardware="true" borderless="true" vsync="false"  />
 
   <source path="src" />
   <source path="lib" />

@@ -12,6 +12,7 @@ hr {
   height: 1px;
   background-color: #444;
   border: none;
+  border-radius: 3px;
 }
 h2 { margin-bottom: 12px; }
 .screenshot {

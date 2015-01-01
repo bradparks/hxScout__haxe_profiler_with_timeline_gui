@@ -14,5 +14,5 @@ echo "Packaging $TGT.tgz"
 cp splash/export/linux64/cpp/bin/hxScoutSplash client/export/linux64/cpp/bin/
 mkdir $TGT
 cp -rf client/export/linux64/cpp/bin/* $TGT/
-tar -czf ../$TGT.tgz $TGT
+tar -czf ../$TGT-linux.tgz $TGT
 rm -rf $TGT splash/export client/export

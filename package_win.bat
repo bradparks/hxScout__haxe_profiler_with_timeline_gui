@@ -13,10 +13,10 @@ call lime build windows > NUL
 cd ..
 set /p VER=<version.txt
 set TGT=hxScout-%VER: =_%
-echo Packaging %TGT%.zip
+echo Packaging %TGT%-win.zip
 copy splash\export\windows\cpp\bin\hxScoutSplash.exe client\export\windows\cpp\bin\ > NUL
 cd client\export\windows\cpp\
 ren bin %TGT%
-..\..\..\..\..\util\zip.exe -r %TGT%.zip %TGT% > NUL
-move %TGT%.zip ..\..\..\..\..\ > NUL
+..\..\..\..\..\util\zip.exe -r %TGT%-win.zip %TGT% > NUL
+move %TGT%-win.zip ..\..\..\..\..\ > NUL
 cd ..\..\..\..\..\

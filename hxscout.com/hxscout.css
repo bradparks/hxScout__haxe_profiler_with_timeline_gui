@@ -1,0 +1,134 @@
+body {
+  padding:1% 8%;
+  font-family:helvetica,arial;
+  font-size:18px;
+  color:#444;
+  background-color:#eee;
+  line-height:140%;
+  cursor:default;
+background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAIAAAACDbGyAAAALElEQVQImU3JIQ4AQAgDwQXf/3+xvsGfuRDkZMo2IAkA+iJJzczi/0JSXwAPzNARoItwFzYAAAAASUVORK5CYII=);
+}
+hr {
+  height: 1px;
+  background-color: #444;
+  border: none;
+}
+h2 { margin-bottom: 12px; }
+.screenshot {
+  width:30%;
+  float:right;
+  margin-left:15px;
+  box-shadow: 1px 1px 8px rgba(0,0,0,0.4);
+  border-radius: 3px;
+}
+.container {
+  position:relative;
+  background-color:rgba(240,240,240,0.6);
+  padding: 15px 40px 40px 40px;
+  border-radius: 3px;
+  max-width:1000px;
+  margin: 0 auto;
+  box-shadow: 1px 1px 128px rgba(64,64,64,0.2);
+  border: 1px solid #ccc;
+}
+a, a:link, a:visited, a:active {text-decoration: underline; color: #69c; transition:color .1s linear; }
+a:hover { color: #457; }
+
+h1 {
+background-color: #666;
+margin: -15px -48px 0 -48px;
+padding: 20px;
+box-shadow: 0 3px 15px rgba(0,0,0,0.2), inset 0 0 64px rgba(0,0,0,0.25);
+color: rgba(255,255,255,0.5);
+font-size: 50px;
+background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAIAAAACDbGyAAAAKklEQVQImU3JoQ0AMAACwS+C7dh/F1RN0yAvd5IAbQFAC9tavP9oqwVwAZrkD9+1kS2lAAAAAElFTkSuQmCC);
+}
+h1 img { height:60px; }
+h2 i { display:none; }
+
+.download {
+  background-color: #444;
+  padding: 10px 25px;
+  padding-right:22px;
+  margin-right: 20px;
+  border-radius: 20px;
+  box-shadow: 1px 1px 8px rgba(0,0,0,0.4);
+}
+a.download {
+  color: #eee !important;
+  text-decoration: none;
+  transition:background-color .1s linear;
+}
+a.download:hover { background-color: #666; }
+.mono {
+  position:relative;
+  top: -1px;
+  font-family: courier,monospace;
+  background-color: #ddd;
+  padding: 1px 4px;
+}
+
+
+@font-face {
+  font-family: 'icons';
+  src: url('icons.eot?66653047');
+  src: url('icons.eot?66653047#iefix') format('embedded-opentype'),
+       url('icons.woff?66653047') format('woff'),
+       url('icons.ttf?66653047') format('truetype'),
+       url('icons.svg?66653047#icons') format('svg');
+  font-weight: normal;
+  font-style: normal;
+}
+@media screen and (-webkit-min-device-pixel-ratio:0) {
+  @font-face {
+    font-family: 'icons';
+    src: url('../font/icons.svg?66653047#icons') format('svg');
+  }
+}
+ 
+ [class^="icon-"]:before, [class*=" icon-"]:before {
+  font-family: "icons";
+  font-style: normal;
+  font-weight: normal;
+  speak: none;
+ 
+  display: inline-block;
+  text-decoration: inherit;
+  width: 1.2em;
+  margin-right: .2em;
+  text-align: center;
+  /* opacity: .8; */
+ 
+  /* For safety - reset parent styles, that can break glyph codes*/
+  font-variant: normal;
+  text-transform: none;
+     
+  /* fix buttons height, for twitter bootstrap */
+  line-height: 1em;
+ 
+  /* Animation center compensation - margins should be symmetric */
+  /* remove if not needed */
+  margin-left: .2em;
+ 
+  /* you can be more comfortable with increased icons size
+  font-size: 90%;
+
+position:relative;
+top:-2px;
+background-color:#444;
+color:#ddd;
+border-radius:30px;
+padding: 8px;
+  /* Uncomment for 3D effect */
+  /* text-shadow: 1px 1px 1px rgba(127, 127, 127, 0.3); */
+}
+ 
+.icon-download-outline:before { content: '\e800'; } /* '' */
+.icon-info-outline:before { content: '\e801'; } /* '' */
+.icon-th-list-outline:before { content: '\e802'; } /* '' */
+.icon-windows:before { content: '\e803'; } /* '' */
+.icon-apple:before { content: '\e804'; } /* '' */
+.icon-linux:before { content: '\e805'; } /* '' */
+.icon-cancel-circled:before { content: '\e806'; } /* '' */
+.icon-ok-circled:before { content: '\e807'; } /* '' */
+.icon-right-dir:before { content: '\e808'; } /* '' */

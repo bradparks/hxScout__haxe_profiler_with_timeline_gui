@@ -11,6 +11,10 @@ class Build {
     }
 
     var ver = "v "+trim(sys.io.File.getContent("../version.txt"));
+#if windows
+    return Context.makeExpr(ver, Context.currentPos());
+#end
+
     ver = ver + " - " + trim( exec("git", ["rev-parse", "--short", "HEAD"]) );
     ver = ver + ", "+ Date.now().toString() + ", " + trim( exec("whoami") ) +"@" + trim( exec("hostname") );
     return Context.makeExpr(ver, Context.currentPos());

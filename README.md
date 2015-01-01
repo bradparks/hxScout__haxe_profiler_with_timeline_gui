@@ -33,7 +33,7 @@ Scout app.  When built for Flash/Neko, the client attaches to a server thread.
 Currently frame timing data, memory usage, and the sampling profiler data are pretty well figured out.
 The hxScout client GUI is functional but lacks many features, as seen in the screenshots on this page.
 
-# ![hxScout client alpha](https://raw.githubusercontent.com/jcward/hxScout/master/src/client/hxscout.gif)
+# ![hxScout client alpha](https://raw.githubusercontent.com/jcward/hxScout/master/hxscout.gif)
 
 There are a number of utilities in the [util directory](https://github.com/jcward/hxScout/tree/master/util)
 for capturing, storing, piping, and converting FLM data to readable text. Some may only work in Linux (or if

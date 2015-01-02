@@ -19,8 +19,10 @@ package
       stage.align = 'topLeft';
 
       var t:TextField = new TextField();
-      t.text = "This SWF is compiled with -advanced-telemetry\n\nIf you have a .telemetry.cfg setup,\nstart hxScout, and load this SWF,\nyou'll see timing, profiler, and\nallocation data in hxScout.";
-      t.width = stage.stageWidth;
+      t.text = "This SWF is compiled with -advanced-telemetry\n\nIf you have a .telemetry.cfg setup,\nstart hxScout, then load this SWF,\nyou'll see timing, profiler, and\n(with a debug player) allocation\ndata in hxScout.";
+      t.width = t.height = 500;
+      t.scaleX = t.scaleY = 1.5;
+      t.x = t.y = 10;
       addChild(t);
 
       // Alloc on each frame, 10x the frame number

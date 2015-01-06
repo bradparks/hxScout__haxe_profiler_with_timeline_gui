@@ -1,7 +1,9 @@
 hxScout
 =======
 
-A Haxe Scout Alternative
+A free, cross-platform and open source alternative to Adobe Scout, hxScout is a profiling tool for SWF (and soon Haxe*) applications that displays frame timing, memory usage, and profiling information.
+
+Visit [hxscout.com](http://hxscout.com) to download for Windows, OSX, or Linux.
 
 [<img src="https://raw.githubusercontent.com/jcward/hxScout/master/hxscout.png" width=240>](https://raw.githubusercontent.com/jcward/hxScout/master/hxscout.png)
 
@@ -19,36 +21,42 @@ and I'm a linux and OSS fan.  Well, and I wanted a project to play with Haxe and
 Status
 ------
 
-Alpha / heavy development - hxscout basically works, displaying limited telemetry data in a manner
-similar to Adobe Scout, though with far fewer features. There is a client and a server project and a
-number of FLM utilities and test cases.
+Beta - hxscout basically works, displaying some telemetry data in a manner similar to Adobe Scout,
+though with far fewer features at the moment. hxScout displays timing, profiling and memory allocation data. hxScout does not support rendering or Stage3D profiling, and it doesn't currently have all the UI options that Scout does (sorting information, top-down and bottom-up options, customizable panes, etc.)
+
+The goal is not to replicate every feature of Scout, but to provide a tool that supports the highest ROI profiling functions, free for all developers on all platforms, that supports the Flash Platform and beyond.
+
+Details
+-------
+
+hxScout code is organized as a server app/thread and a client app/thread.
 
 The server is a vanilla Haxe project that receives telemetry (aka FLM) data on port 7934 from Flash/AIR,
 processes it some, and passes frame data to the client app over another socket.
 
-The client is an OpenFL project that attaches to a server, and receives and displays telemetry
-data.  When built for CPP the client includes a server thread, so it operates just like the
-Scout app.  When built for Flash/Neko, the client attaches to a server thread.
+The client is an OpenFL project that attaches to the server thread, and displays the telemetry
+data in a GUI.  When built for CPP the client includes a server thread, so it operates just like the
+Scout app.  When built for Flash/Neko (semi-working), the client attaches to a separate standalone server app.
 
 Currently frame timing data, memory usage, and the sampling profiler data are pretty well figured out.
-The hxScout client GUI is functional but lacks many features, as seen in the screenshots on this page.
-
-# ![hxScout client alpha](https://raw.githubusercontent.com/jcward/hxScout/master/hxscout.gif)
+Object allocation telemetry is basically working in progress. None yet support the various modes of
+display such as top down / bottom up.
 
 There are a number of utilities in the [util directory](https://github.com/jcward/hxScout/tree/master/util)
 for capturing, storing, piping, and converting FLM data to readable text. Some may only work in Linux (or if
-you have netcat installed.)
+you have netcat installed on OSX.)
 
 Progress / Goal
 ---------------
 
-See my list of issues to get a glimpse of what's on my radar and what I'm working on. My goal is to create a
-basic free profiling tool, so I likely won't get to things like Stage3D debugging.
+See my list of issues to get a glimpse of what's on my radar and what I'm working on.
 
 FLM Exploration
 ---------------
 
-I've setup a number of [flm_exploration](https://github.com/jcward/hxScout/tree/master/flm_exploration) testcases that run various AS3 AIR app tests, capturing the .flm output with a variety of telemetry configuration options (basic, sampler, cpu, allocations, etc). These allow me to poke at the FLM format, and try to figure out what various telemetry messages mean. I can also open the .flm files in Scout to help.
+I've setup a number of [flm_exploration](https://github.com/jcward/hxScout/tree/master/flm_exploration) testcases that run various AS3 AIR app tests, capturing the .flm output with a variety of telemetry configuration options (basic, sampler, cpu, allocations, etc). These allow me to poke at the FLM format, and try to figure out what various telemetry messages mean. I can also open the .flm files in Scout to compare with hxScout.
+
+# ![hxScout client alpha](https://raw.githubusercontent.com/jcward/hxScout/master/hxscout.gif)
 
 TODO / Help
 -----------

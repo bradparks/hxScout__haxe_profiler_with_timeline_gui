@@ -197,7 +197,6 @@ class Main extends Sprite {
 }
 
 class SampleData {
-  public var collapsed:Bool = false;
   public var total_time:Int = 0;
   public var self_time:Int = 0;
   public var children:haxe.ds.IntMap<SampleData> = new haxe.ds.IntMap<SampleData>();
@@ -238,14 +237,18 @@ typedef AllocSize = {
 }
 
 class AllocData {
-  public var per_stack_map:StringMap<AllocSize>;
-  public var total_size:Int;
-  public var total_num:Int;
+  public var total_size:Int = 0;
+  public var total_num:Int = 0;
+  public var children:haxe.ds.IntMap<AllocData> = new haxe.ds.IntMap<AllocData>();
+  public var callstack_id:Int = 0;
 
-  public function new() {
-    per_stack_map = new StringMap<AllocSize>();
-    total_size = 0;
-    total_num = 0;
+  public function ensure_child(idx):AllocData
+  {
+    if (!children.exists(idx)) {
+      var s = new AllocData();
+      children.set(idx, s);
+    }
+    return children.get(idx);
   }
 }
 
@@ -1273,16 +1276,26 @@ class SelectionController {
           for (i in 0...news.length) {
             var item = news[i];
             if (!allocs.exists(item.type)) allocs.set(item.type, new AllocData());
-            var ad = allocs.get(item.type);
-            //trace("pushing stackId: "+item);
-            if (!ad.per_stack_map.exists(item.stackid)) {
-              var as:AllocSize = { size:0, num:0 };
-              ad.per_stack_map.set(item.stackid, as);
-            }
-            ad.per_stack_map.get(item.stackid).size += item.size;
-            ad.per_stack_map.get(item.stackid).num++;
+            var ad:AllocData = allocs.get(item.type);
             ad.total_size += item.size;
             ad.total_num++;
+            //trace("pushing stackId: "+item);
+
+            var id = Std.parseInt(item.stackid)-1;
+            var callstack:Array<Int> = session.stack_maps[id];
+            if (callstack==null) {
+              if (item.type!="[object Event]") trace("- warning: null callstack for "+item.type);
+              continue;
+            }
+            //trace(" - type "+item.type+", callstack="+callstack);
+
+            var ptr:AllocData = ad;
+            for (j in 0...callstack.length) {
+              ptr = ptr.ensure_child(callstack[j]);
+              ptr.total_size += item.size;
+              ptr.total_num++;
+              ptr.callstack_id = callstack[j];
+            }
 
             total_num++;
             total_size += item.size;
@@ -1335,48 +1348,52 @@ class SelectionController {
 
         y += lbl.height;
 
-        // stacks (bottom-up objects)
-        var stackids:Array<String> = new Array<String>();
-        var k = ad.per_stack_map.keys();
-        while (k.hasNext()) stackids.push(k.next());
-
-        if (stackids.length>0) {
+        // merged stacks (bottom-up objects)
+        if (ad.children.keys().hasNext()) {
           Util.add_collapse_button(cont, lbl, false, alloc_pane.invalidate_scrollbars);
-        }
 
-        //trace(type+":");
-        //trace("num: "+ad.total_num+", size:"+ad.total_size);
-        for (stackid in stackids) {
-          var psm = ad.per_stack_map.get(stackid);
-          //trace(psm);
-          var id = Std.parseInt(stackid)-1;
-          var callstack:Array<Int> = session.stack_maps[id];
-          if (callstack==null) {
-            if (stackids.length>1 || type.indexOf('Event')<0) {
-              trace("ERROR - callstack for alloc of "+type+", id="+id+" out of range of length="+session.stack_maps.length);
+          inline function iterate_children(alloc_data:AllocData,
+                                           sort_param:String, // TODO: Implement various sorting
+                                           f:AllocData->Int->Void,
+                                           depth:Int=0):Void
+          {
+            var children:Array<AllocData> = new Array<AllocData>();
+            for (child in alloc_data.children) {
+              children.push(child);
             }
-          } else {
-            for (i in 0...callstack.length) {
-              var stack = Util.make_label(session.stack_strings[callstack[i]], 12, 0x66aadd);
-              var cont = new Sprite();
-              cont.addChild(stack);
-              cont.x = 30+15*i;
-              cont.y = y;
-              alloc_pane.cont.addChild(cont);
-   
-              if (i<callstack.length-1) Util.add_collapse_button(cont, stack, false, alloc_pane.invalidate_scrollbars);
-   
-              draw_pct(cont, psm.num, total_num, alloc_pane.innerWidth-120-cont.x+15);
-              draw_pct(cont, Math.round(psm.size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10-cont.x+15);
-   
-              //ping = !ping;
-              //if (ping) {
-              //  alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
-              //  alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,stack.height);
-              //}
-              y += stack.height;
+            children.sort(function(a:AllocData, b:AllocData):Int {
+              return a.total_num > b.total_num ? -1 : (a.total_num < b.total_num ? 1 : 0);
+            });
+            for (child in children) {
+              f(child, depth);
             }
           }
+
+          function draw_alloc_data(d:AllocData, depth:Int=0):Void
+          {
+            var stack = Util.make_label(session.stack_strings[d.callstack_id], 12, 0x66aadd);
+            var cont = new Sprite();
+            cont.addChild(stack);
+            cont.x = 30+15*(depth+1);
+            cont.y = y;
+            alloc_pane.cont.addChild(cont);
+   
+            if (d.children.keys().hasNext()) Util.add_collapse_button(cont, stack, false, alloc_pane.invalidate_scrollbars);
+   
+            draw_pct(cont, d.total_num, total_num, alloc_pane.innerWidth-120-cont.x+15);
+            draw_pct(cont, Math.round(d.total_size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10-cont.x+15);
+
+            y += stack.height;
+
+            iterate_children(d, "total_num", draw_alloc_data, depth+1);
+          }
+
+          iterate_children(ad, "total_num", draw_alloc_data);
+          //ping = !ping;
+          //if (ping) {
+          //  alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
+          //  alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,stack.height);
+          //}
         }
 
       }

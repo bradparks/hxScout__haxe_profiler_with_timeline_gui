@@ -977,6 +977,14 @@ class SelectionController {
     "other":{ name:"Other", color:0xaa4488 }
   }
 
+  private var _prof_sort_self:Bool = false;
+  public function handle_sort_self(e:Event=null):Void { _prof_sort_self = true; redraw(); }
+  public function handle_sort_total(e:Event=null):Void { _prof_sort_self = false; redraw(); }
+
+  private var _alloc_sort_count:Bool = false;
+  public function handle_sort_size(e:Event=null):Void { _alloc_sort_count = false; redraw(); }
+  public function handle_sort_count(e:Event=null):Void { _alloc_sort_count = true; redraw(); }
+
   private var invalid:Bool = false;
   public function redraw() { invalid = true; }
   private function handle_enter_frame(e:Event):Void
@@ -1209,11 +1217,13 @@ class SelectionController {
       function display_samples(ptr:SampleData, indent:Int=0):Void
       {
         var keys = ptr.children.keys();
-        var sorted:Array<Int> = new Array<Int>(); // TODO: also self_time
+        var sorted:Array<Int> = new Array<Int>();
         for (key in keys) sorted.push(key);
         sorted.sort(function(i0:Int, i1:Int):Int {
           var sd0 = ptr.children.get(i0);
           var sd1 = ptr.children.get(i1);
+          if (_prof_sort_self) return sd0.self_time > sd1.self_time ? -1 :
+                                 (sd0.self_time < sd1.self_time ? 1 : 0);
           return sd0.total_time > sd1.total_time ? -1 :
             (sd0.total_time < sd1.total_time ? 1 : 0);
         });
@@ -1315,7 +1325,18 @@ class SelectionController {
       //trace(allocs);
       var y:Float = 0;
       var ping = true;
-      for (type in allocs.keys()) {
+
+      var keys = allocs.keys();
+      var sorted:Array<String> = new Array<String>();
+      for (key in keys) sorted.push(key);
+      sorted.sort(function(i0:String, i1:String):Int {
+        var ad0 = allocs.get(i0);
+        var ad1 = allocs.get(i1);
+        if (_alloc_sort_count) return ad0.total_num > ad1.total_num ? -1 : (ad0.total_num < ad1.total_num ? 1 : 0);
+        return ad0.total_size > ad1.total_size ? -1 : (ad0.total_size < ad1.total_size ? 1 : 0);
+      });
+
+      for (type in sorted) {
         var ad = allocs.get(type);
 
         // type name formatting
@@ -1369,7 +1390,8 @@ class SelectionController {
             var children:Array<AllocData> = new Array<AllocData>();
             for (child in alloc_data.children) children.push(child);
             children.sort(function(a:AllocData, b:AllocData):Int {
-              return a.total_num > b.total_num ? -1 : (a.total_num < b.total_num ? 1 : 0);
+              if (_alloc_sort_count) return a.total_num > b.total_num ? -1 : (a.total_num < b.total_num ? 1 : 0);
+              return a.total_size > b.total_size ? -1 : (a.total_size < b.total_size ? 1 : 0);
             });
             for (child in children) {
               f(child, depth);
@@ -1381,7 +1403,7 @@ class SelectionController {
             var stack = Util.make_label(session.stack_strings[d.callstack_id], 12, 0x66aadd);
             var cont = new Sprite();
             cont.addChild(stack);
-            cont.x = 30+15*(depth+1);
+            cont.x = 15+15*(depth+1);
             cont.y = y;
             alloc_pane.cont.addChild(cont);
    
@@ -1418,8 +1440,8 @@ class DetailUI {
 
   private var pcont:Sprite;
   private var acont:Sprite;
-  private var plbl:openfl.text.TextField;
-  private var albl:openfl.text.TextField;
+  private var plbl:Sprite;
+  private var albl:Sprite;
 
   public function new (detail_pane, sample_pane, alloc_pane, sel_ctrl):Void
   {
@@ -1451,15 +1473,29 @@ class DetailUI {
     a.x = p.x+p.width+5;
     detail_pane.cont.addChild(a);
 
-    plbl = Util.make_label("Self Time (ms)              Total Time (ms)", 12);
+    plbl = new Sprite();
+    var plbl_self = Util.make_label("Self Time (ms)", 12);
+    var plbl_total = Util.make_label("Total Time (ms)", 12);
+    plbl.addChild(plbl_self);
+    plbl.addChild(plbl_total);
+    plbl_total.x = 130;
     detail_pane.cont.addChild(plbl);
+    AEL.add(plbl_self, MouseEvent.CLICK, sel_ctrl.handle_sort_self);
+    AEL.add(plbl_total, MouseEvent.CLICK, sel_ctrl.handle_sort_total);
 
-    albl = Util.make_label("Number                          Size (KB)", 12);
+    albl = new Sprite();
+    var albl_size = Util.make_label("Size (KB)", 12);
+    var albl_count = Util.make_label("Count", 12);
+    albl.addChild(albl_size);
+    albl.addChild(albl_count);
+    albl_size.x = 130;
     detail_pane.cont.addChild(albl);
+    AEL.add(albl_size, MouseEvent.CLICK, sel_ctrl.handle_sort_size);
+    AEL.add(albl_count, MouseEvent.CLICK, sel_ctrl.handle_sort_count);
 
-    function handle_click(e:Event):Void { select(e.target); }
-    AEL.add(p, MouseEvent.CLICK, handle_click);
-    AEL.add(a, MouseEvent.CLICK, handle_click);
+    function handle_tab_click(e:Event):Void { select(e.target); }
+    AEL.add(p, MouseEvent.CLICK, handle_tab_click);
+    AEL.add(a, MouseEvent.CLICK, handle_tab_click);
     select(p);
 
     AEL.add(Util.stage, KeyboardEvent.KEY_DOWN, handle_key);

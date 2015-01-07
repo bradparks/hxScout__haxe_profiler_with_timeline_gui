@@ -1209,7 +1209,16 @@ class SelectionController {
       function display_samples(ptr:SampleData, indent:Int=0):Void
       {
         var keys = ptr.children.keys();
-        for (i in keys) {
+        var sorted:Array<Int> = new Array<Int>(); // TODO: also self_time
+        for (key in keys) sorted.push(key);
+        sorted.sort(function(i0:Int, i1:Int):Int {
+          var sd0 = ptr.children.get(i0);
+          var sd1 = ptr.children.get(i1);
+          return sd0.total_time > sd1.total_time ? -1 :
+            (sd0.total_time < sd1.total_time ? 1 : 0);
+        });
+
+        for (i in sorted) {
           var sample = ptr.children.get(i);
 
           var cont:Sprite = new Sprite();
@@ -1358,9 +1367,7 @@ class SelectionController {
                                            depth:Int=0):Void
           {
             var children:Array<AllocData> = new Array<AllocData>();
-            for (child in alloc_data.children) {
-              children.push(child);
-            }
+            for (child in alloc_data.children) children.push(child);
             children.sort(function(a:AllocData, b:AllocData):Int {
               return a.total_num > b.total_num ? -1 : (a.total_num < b.total_num ? 1 : 0);
             });

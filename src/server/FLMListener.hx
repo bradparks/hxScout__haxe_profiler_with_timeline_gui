@@ -41,7 +41,7 @@ class FLMListener {
     var cur_frame = new Frame(0, inst_id);
     var delta:Int = 0;
     var next_is_as = false;
-    var stack_strings:Array<String> = ["1-indexed"];
+    // var stack_strings:Array<String> = ["1-indexed"];
 
     var r = new Amf3Reader(flm_socket.input);
     var connected = true;
@@ -210,7 +210,15 @@ class FLMListener {
         // Sampler
         // - - - - - - - - - - - -
         if (name.indexOf(".sampler.")==0) {
-          if (name==".sampler.methodNameMap") {
+          if (name==".sampler.methodNameMapArray") {
+            if (cur_frame.push_stack_strings==null) cur_frame.push_stack_strings = [];
+            var names:Array<String> = cast(data["value"]);
+            for (i in names) {
+              cur_frame.push_stack_strings.push(i);
+              //stack_strings.push(stack_string);
+            }
+          }
+          else if (name==".sampler.methodNameMap") {
             if (cur_frame.push_stack_strings==null) cur_frame.push_stack_strings = [];
             var bytes = cast(data["value"], haxe.io.Bytes);
             var start=0;
@@ -219,7 +227,7 @@ class FLMListener {
               if (b==0) {
                 var stack_string:String = bytes.getString(start, i-start);
                 cur_frame.push_stack_strings.push(stack_string);
-                stack_strings.push(stack_string);
+                //stack_strings.push(stack_string);
                 start = i+1;
               }
             }

@@ -367,7 +367,7 @@ class FLMSession {
         var ad:AllocData = bottom_up.get(item.type);
         ad.total_size += item.size;
         ad.total_num++;
-        //trace("pushing stackId: "+item);
+        //trace("collate allocation: "+item);
 
         var id = Std.parseInt(item.stackid)-1;
         var callstack:Array<Int> = this.stack_maps[id];
@@ -1339,6 +1339,9 @@ class SelectionController {
             function merge_children(tgt:AllocData, src:AllocData) {
               tgt.total_size += src.total_size;
               tgt.total_num += src.total_num;
+              tgt.callstack_id = src.callstack_id;
+              total_size += src.total_size;
+              total_num += src.total_num;
               for (key in src.children.keys()) {
                 if (!tgt.children.exists(key)) tgt.children.set(key, new AllocData());
                 merge_children(tgt.children.get(key), src.children.get(key));

@@ -301,9 +301,9 @@ class FLMSession {
       }
     }
 
-    if (frame_data.samples!=null) {
-      collate_sample_data(frame_data);
-    }
+    if (frame_data.samples!=null) collate_sample_data(frame_data);
+    if (frame_data.alloc!=null) collate_alloc_data(frame_data);
+
     frames.push(frame_data);
   }
 
@@ -313,7 +313,7 @@ class FLMSession {
     var samples:Array<Dynamic> = frame_data.samples;
 
     var top_down = new SampleData();
-    frame_data.top_down = top_down;
+    frame_data.prof_top_down = top_down;
     for (sample in samples) {
       var numticks:Int = sample.numticks;
       var callstack:Array<Int> = sample.callstack;
@@ -329,10 +329,10 @@ class FLMSession {
     top_down.calc_self_time();
 
     //trace("Top Down, frame "+(frames.length+1));
-    //print_samples(frame_data.top_down);
+    //print_samples(frame_data.prof_top_down);
 
     var bottom_up = new SampleData();
-    frame_data.bottom_up = bottom_up;
+    frame_data.prof_bottom_up = bottom_up;
     for (sample in samples) {
       var numticks:Int = sample.numticks;
       var callstack:Array<Int> = sample.callstack;
@@ -347,7 +347,47 @@ class FLMSession {
     }
 
     //trace("Bottom Up, frame "+(frames.length+1));
-    //print_samples(frame_data.bottom_up);
+    //print_samples(frame_data.prof_bottom_up);
+  }
+
+  private function collate_alloc_data(frame_data:Dynamic):Void
+  {
+    //trace(haxe.Json.stringify(frame_data.alloc, null, "  "));
+    var news:Array<Dynamic> = frame_data.alloc.newObject;
+    var updates:Array<Dynamic> = frame_data.alloc.updateObject;
+    var deletes:Array<Dynamic> = frame_data.alloc.deleteObject;
+
+    // Bottom-up objects by type
+    var bottom_up = new StringMap<AllocData>();
+    frame_data.alloc_bottom_up = bottom_up;
+    if (news!=null) {
+      for (i in 0...news.length) {
+        var item = news[i];
+        if (!bottom_up.exists(item.type)) bottom_up.set(item.type, new AllocData());
+        var ad:AllocData = bottom_up.get(item.type);
+        ad.total_size += item.size;
+        ad.total_num++;
+        //trace("collate allocation: "+item);
+
+        var id = Std.parseInt(item.stackid)-1;
+        var callstack:Array<Int> = this.stack_maps[id];
+        if (callstack==null) {
+          if (item.type!="[object Event]") trace("- warning: null callstack for "+item.type+" on frame id="+frame_data.id);
+          continue;
+        }
+        //trace(" - type "+item.type+", callstack="+callstack);
+
+        var ptr:AllocData = ad;
+        for (j in 0...callstack.length) {
+          ptr = ptr.ensure_child(callstack[j]);
+          ptr.total_size += item.size;
+          ptr.total_num++;
+          ptr.callstack_id = callstack[j];
+        }
+      }
+    }
+
+    // TODO: top-down allocs
   }
 
   //private static var INDENT:String = "                                            ";
@@ -1208,7 +1248,7 @@ class SelectionController {
       var top_down = new SampleData();
       var total:Float = 0;
       each_frame(function(f) {
-        if (f.top_down!=null) SampleData.merge_sample_data(top_down, f.top_down);
+        if (f.prof_top_down!=null) SampleData.merge_sample_data(top_down, f.prof_top_down);
         total += f.duration.as/1000;
       });
 
@@ -1290,34 +1330,24 @@ class SelectionController {
       var total_num = 0;
       var total_size = 0;
       each_frame(function(f) { // also updateObjects?
-        var news:Array<Dynamic> = f.alloc!=null ? f.alloc.newObject : null;
-        if (news!=null) {
-          for (i in 0...news.length) {
-            var item = news[i];
-            if (!allocs.exists(item.type)) allocs.set(item.type, new AllocData());
-            var ad:AllocData = allocs.get(item.type);
-            ad.total_size += item.size;
-            ad.total_num++;
-            //trace("pushing stackId: "+item);
+        var frame_allocs:StringMap<AllocData> = f.alloc_bottom_up;
+        if (frame_allocs!=null) {
+          for (type in frame_allocs.keys()) {
+            if (!allocs.exists(type)) allocs.set(type, new AllocData());
+            var ad:AllocData = allocs.get(type);
 
-            var id = Std.parseInt(item.stackid)-1;
-            var callstack:Array<Int> = session.stack_maps[id];
-            if (callstack==null) {
-              if (item.type!="[object Event]") trace("- warning: null callstack for "+item.type);
-              continue;
+            function merge_children(tgt:AllocData, src:AllocData) {
+              tgt.total_size += src.total_size;
+              tgt.total_num += src.total_num;
+              tgt.callstack_id = src.callstack_id;
+              total_size += src.total_size;
+              total_num += src.total_num;
+              for (key in src.children.keys()) {
+                if (!tgt.children.exists(key)) tgt.children.set(key, new AllocData());
+                merge_children(tgt.children.get(key), src.children.get(key));
+              }
             }
-            //trace(" - type "+item.type+", callstack="+callstack);
-
-            var ptr:AllocData = ad;
-            for (j in 0...callstack.length) {
-              ptr = ptr.ensure_child(callstack[j]);
-              ptr.total_size += item.size;
-              ptr.total_num++;
-              ptr.callstack_id = callstack[j];
-            }
-
-            total_num++;
-            total_size += item.size;
+            merge_children(ad, frame_allocs.get(type));
           }
         }
       });

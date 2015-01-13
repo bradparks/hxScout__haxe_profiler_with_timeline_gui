@@ -231,11 +231,6 @@ class SampleData {
   }
 }
 
-typedef AllocSize = {
-  size:Int,
-  num:Int
-}
-
 class AllocData {
   public var total_size:Int = 0;
   public var total_num:Int = 0;
@@ -1245,10 +1240,10 @@ class SelectionController {
     // - - - - - - - - - - - - - - -
     if (sample_pane.visible) {
 
-      var top_down = new SampleData();
+      var sample_data = new SampleData();
       var total:Float = 0;
       each_frame(function(f) {
-        if (f.prof_top_down!=null) SampleData.merge_sample_data(top_down, f.prof_top_down);
+        if (f.prof_top_down!=null) SampleData.merge_sample_data(sample_data, f.prof_top_down);
         total += f.duration.as/1000;
       });
 
@@ -1317,7 +1312,7 @@ class SelectionController {
           display_samples(sample, indent+1);
         }
       }
-      display_samples(top_down);
+      display_samples(sample_data);
 
     }
 

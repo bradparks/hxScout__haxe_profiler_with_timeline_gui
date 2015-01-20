@@ -5,6 +5,7 @@ import flash.events.*;
 
 import openfl.net.Socket;
 import haxe.ds.StringMap;
+import haxe.ds.IntMap;
 
 class Main extends Sprite {
 
@@ -196,10 +197,32 @@ class Main extends Sprite {
   }
 }
 
-class SampleData {
+class ColOptions {
+  public var title:String;
+  public var show_percent:Bool;
+  public var sortable:Bool;
+}
+
+class HLDataSchema {
+  public var sort_column:Int;
+  public var sort_direction:Bool;
+  public function get_num_cols():Int;
+  public function get_col_options():ColOptions;
+}
+
+// HierarchicalListableData
+interface HLData {
+  // Class static schema:HLDataSchema
+  public function get_value_at_col(col:Int):FloarOrInt;
+  public function get_children():IntMap<HLData>;
+}
+
+class SampleData implements HLData {
+  public static var schema:HLDataSchema;
+
   public var total_time:Int = 0;
   public var self_time:Int = 0;
-  public var children:haxe.ds.IntMap<SampleData> = new haxe.ds.IntMap<SampleData>();
+  public var children:IntMap<SampleData> = new IntMap<SampleData>();
 
   public function ensure_child(idx):Void
   {
@@ -234,7 +257,7 @@ class SampleData {
 class AllocData {
   public var total_size:Int = 0;
   public var total_num:Int = 0;
-  public var children:haxe.ds.IntMap<AllocData> = new haxe.ds.IntMap<AllocData>();
+  public var children:IntMap<AllocData> = new IntMap<AllocData>();
   public var callstack_id:Int = 0;
 
   public function ensure_child(idx):AllocData

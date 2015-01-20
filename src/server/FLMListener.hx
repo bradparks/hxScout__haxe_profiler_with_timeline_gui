@@ -142,6 +142,7 @@ class FLMListener {
           else if (name.indexOf(".gc.")==0) cur_frame.duration.gc += self_time;
           else if (name.indexOf(".exit")==0) cur_frame.duration.other += self_time;
           else if (name.indexOf(".rend.")==0) cur_frame.duration.rend += self_time;
+          else if (name.indexOf(".other.")==0) cur_frame.duration.other += self_time;
           else if (name.indexOf(".swf.")==0) cur_frame.duration.other += self_time;
           else if (name.indexOf(".network.")==0) cur_frame.duration.net += self_time;
           else {

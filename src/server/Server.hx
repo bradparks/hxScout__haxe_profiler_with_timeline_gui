@@ -12,6 +12,7 @@ class Server {
 
     var listener = Thread.create(FLMListener.start);
     listener.sendMessage(Thread.current());
+    listener.sendMessage(7934);
 
     var s = new Socket();
     s.bind(new sys.net.Host("0.0.0.0"),7933); // hxScout client port

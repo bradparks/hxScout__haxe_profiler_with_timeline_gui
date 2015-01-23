@@ -20,13 +20,14 @@ class FLMListener {
   static public function start()
   {
     var client_writer = Thread.readMessage(true);
+    var port = Thread.readMessage(true);
 
     trace("Starting FLM listener...");
     var s = new Socket();
-    s.bind(new sys.net.Host("0.0.0.0"),7934); // Default Scout port
+    s.bind(new sys.net.Host("0.0.0.0"), port); // Default Scout port
     s.listen(8);
 
-    trace("Waiting for FLM on 7934...");
+    trace("Waiting for FLM on "+port+"...");
     var flm_socket : Socket = s.accept();
     var inst_id:Int = (next_inst_id++);
 
@@ -34,6 +35,7 @@ class FLMListener {
     s.close();
     var listener = Thread.create(FLMListener.start);
     listener.sendMessage(client_writer);
+    listener.sendMessage(port);
 
     trace("Starting FLMReader["+inst_id+"]...");
 

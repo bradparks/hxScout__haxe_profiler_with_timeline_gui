@@ -163,8 +163,10 @@ class Main extends Sprite {
     addChildAt(gui = new HXScoutClientGUI(), 0);
     center();
 
+    var port:Int = (Sys.args().length>0 && Sys.args().indexOf('-p')>=0) ? Std.parseInt(Sys.args()[(Sys.args().indexOf('-p')+1)]) : 7934;
     var listener = cpp.vm.Thread.create(FLMListener.start);
     listener.sendMessage(cpp.vm.Thread.current());
+    listener.sendMessage(port);
 
     function on_enter_frame(e:Event):Void
     {

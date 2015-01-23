@@ -44,7 +44,7 @@ class StringCache {
 * 0x0B - xml-marker
 * 0x0C - byte-array-marker 
 */
-class Amf3Writer implements io.Writer {
+class Amf3Writer /*implements io.Writer*/ {
 	
 	public static var countWithoutReflect: Int = 0;
 	public static var countWithReflect: Int = 0;
@@ -173,6 +173,7 @@ public static var INT29_MASK = 0x1FFFFFFF;
 					output.writeByte(0x09);
 					writeAmf3Array(val);
 				} else if (c == cast haxe.io.Bytes) {
+          trace("TODO: fix Amf3Writer, needs separate byte cache from string cache");
 					output.writeByte(0x0C);
 					writeAmf3StringData(val);
 				} else if (c == cast Date) {
@@ -257,7 +258,7 @@ public static var INT29_MASK = 0x1FFFFFFF;
 	/**
 	 * cyclic reference is disabled
 	 */
-	private function writeAmf3Object(val: Dynamic, ?writeFields: Dynamic -> io.Writer -> Int -> Void) {
+	private function writeAmf3Object(val: Dynamic, ?writeFields: Dynamic -> Dynamic /*io.Writer*/ -> Int -> Void) {
 		var ind: Int = writeObjectHeader();
 				
 		if (null != writeFields) {
@@ -292,7 +293,7 @@ public static var INT29_MASK = 0x1FFFFFFF;
 	/**
 	 * Circular referencing is disabled in arrays
 	 */
-	private function writeAmf3Array(array: Array<Dynamic>, ?writeItem: Dynamic -> io.Writer -> Bool) {
+	private function writeAmf3Array(array: Array<Dynamic>, ?writeItem: Dynamic -> Dynamic /*io.Writer*/ -> Bool) {
 		var ind = writeArrayHeader(array);
 		
 		var item;
@@ -344,7 +345,7 @@ public static var INT29_MASK = 0x1FFFFFFF;
 	}
 	
 	
-	public function writeObject(val: Dynamic, writeFields: Dynamic -> io.Writer -> Int -> Void) {
+	public function writeObject(val: Dynamic, writeFields: Dynamic -> Dynamic /*io.Writer*/ -> Int -> Void) {
 		if (null != val) {
 			writeAmf3Object(val, writeFields);
 		} else {
@@ -383,7 +384,7 @@ public static var INT29_MASK = 0x1FFFFFFF;
 		}	
 	}
 	
-	public function writeArray(val: Array <Dynamic>, writeItem: Dynamic -> io.Writer -> Bool) {
+	public function writeArray(val: Array <Dynamic>, writeItem: Dynamic -> Dynamic /*io.Writer*/ -> Bool) {
 		if (null != val) {
 			output.writeByte(0x09);
 			writeAmf3Array(val, writeItem);

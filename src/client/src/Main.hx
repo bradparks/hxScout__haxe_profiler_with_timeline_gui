@@ -199,6 +199,8 @@ class Main extends Sprite {
 }
 
 class SampleData {
+  public function new(){};
+
   public var total_time:Int = 0;
   public var self_time:Int = 0;
   public var children:haxe.ds.IntMap<SampleData> = new haxe.ds.IntMap<SampleData>();
@@ -234,6 +236,8 @@ class SampleData {
 }
 
 class AllocData {
+  public function new(){};
+
   public var total_size:Int = 0;
   public var total_num:Int = 0;
   public var children:haxe.ds.IntMap<AllocData> = new haxe.ds.IntMap<AllocData>();

@@ -24,6 +24,7 @@ class Main extends Sprite {
 
     #if cpp
       setup_flm_listener();
+      setup_hxt_debug_output();
       // CPP, start server thread automatically, failover to request
       //var listener = cpp.vm.Thread.create(Server.main);
       //var s:Socket = null;
@@ -181,6 +182,19 @@ class Main extends Sprite {
 
     stage.addEventListener(Event.ENTER_FRAME, on_enter_frame);
   }
+
+  function setup_hxt_debug_output() {
+    var output_port:Int = (Sys.args().length>0 && Sys.args().indexOf('-d')>=0) ? Std.parseInt(Sys.args()[(Sys.args().indexOf('-d')+1)]) : -1;
+    if (output_port>0) {
+      trace("Will send telemetry on port "+output_port);
+      var cfg = new hxtelemetry.HxTelemetry.Config();
+      cfg.allocations = false;
+      cfg.socket_port = output_port;
+      cfg.app_name = "HxScout";
+      var hxt = new hxtelemetry.HxTelemetry(cfg);
+    }
+  }
+
 #end
 
   function send_frame_data(frame_data):Void

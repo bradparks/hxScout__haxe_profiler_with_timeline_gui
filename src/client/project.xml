@@ -15,8 +15,10 @@
   <haxelib name="openfl" />
   <haxelib name="actuate" />
 
-  <!-- <haxedef name="HXCPP_STACK_TRACE" /> -->
-  <haxeflag name="-D advanced-telemetry" if="flash" />
+  <!-- for debug telemetry -->
+  <haxelib name="hxtelemetry" />
+  <haxedef name="HXCPP_STACK_TRACE" />
+  <haxedef name="HXCPP_TELEMETRY" />
 
   <assets path="assets" rename="assets" exclude="*.svg" />
   <icon path="assets/hxScout.svg" />

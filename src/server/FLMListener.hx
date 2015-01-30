@@ -33,33 +33,35 @@ class FLMListener {
 
     // Launch next listener
     s.close();
+    s = null;
+
     var listener = Thread.create(FLMListener.start);
     listener.sendMessage(client_writer);
     listener.sendMessage(port);
 
-    trace("Starting FLMReader["+inst_id+"]...");
+    trace("Starting FLMListener["+inst_id+"]...");
 
-    var frames:Array<Frame> = [];
+    //var frames:Array<Frame> = [];
     var cur_frame = new Frame(0, inst_id);
     var delta:Int = 0;
     var next_is_as = false;
     // var stack_strings:Array<String> = ["1-indexed"];
 
-    var r = new Amf3Reader(flm_socket.input);
+    var reader = new Amf3Reader(flm_socket.input);
     var connected = true;
     while( connected ) {
 
       // Read next event blob.
       var data:Map<String, Dynamic> = null;
       try {
-        data = r.read();
+        //trace("About to read data on inst "+inst_id);
+        data = reader.read();
       } catch( e:Dynamic) {
         // Handle EOF gracefully
         if (Type.getClass(e)==haxe.io.Eof) {
-          trace("FLMReader["+inst_id+"] closing...");
+          trace("FLMListener["+inst_id+"] closing...");
           connected = false;
           flm_socket.close();
-          trace("TODO: do we need to kill this thread somehow? Should be no external references...");
           break;
         }
         // Handle flash requests for policy file
@@ -257,6 +259,11 @@ class FLMListener {
         }
       }
     }
+
+    flm_socket = null;
+    client_writer = null;
+    reader = null;
+    trace("FLMListener["+inst_id+"] thread complete");
   }
 }
 

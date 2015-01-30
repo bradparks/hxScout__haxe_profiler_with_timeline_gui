@@ -171,12 +171,12 @@ class Main extends Sprite {
 
     function on_enter_frame(e:Event):Void
     {
-      var frame_data;
+      var frame_data:Dynamic;
       while (true) {
         frame_data = cpp.vm.Thread.readMessage(false);
         if (frame_data==null) break;
         // TODO: remove JSON for non-socket
-        send_frame_data(haxe.Json.parse(frame_data));
+        send_frame_data(frame_data);
       }
     }
 
@@ -330,8 +330,8 @@ class FLMSession {
     var top_down = new SampleData();
     frame_data.prof_top_down = top_down;
     for (sample in samples) {
-      var numticks:Int = sample.numticks;
-      var callstack:Array<Int> = sample.callstack;
+      var numticks:Int = sample.get("numticks");
+      var callstack:Array<Dynamic> = sample.get("callstack");
       var ptr:SampleData = top_down;
       var i:Int = callstack.length;
       while ((--i)>=0) {
@@ -346,20 +346,21 @@ class FLMSession {
     //trace("Top Down, frame "+(frames.length+1));
     //print_samples(frame_data.prof_top_down);
 
-    var bottom_up = new SampleData();
-    frame_data.prof_bottom_up = bottom_up;
-    for (sample in samples) {
-      var numticks:Int = sample.numticks;
-      var callstack:Array<Int> = sample.callstack;
-      var ptr:SampleData = bottom_up;
-      var i:Int = -1;
-      while ((++i)<callstack.length) {
-        var idx = callstack[i];
-        ptr.ensure_child(idx);
-        ptr.children.get(idx).self_time += numticks;
-        ptr = ptr.children.get(idx);
-      }
-    }
+    // not yet used...
+    //  var bottom_up = new SampleData();
+    //  frame_data.prof_bottom_up = bottom_up;
+    //  for (sample in samples) {
+    //    var numticks:Int = sample.get("numticks");
+    //    var callstack:Array<Int> = sample.get("callstack");
+    //    var ptr:SampleData = bottom_up;
+    //    var i:Int = -1;
+    //    while ((++i)<callstack.length) {
+    //      var idx = callstack[i];
+    //      ptr.ensure_child(idx);
+    //      ptr.children.get(idx).self_time += numticks;
+    //      ptr = ptr.children.get(idx);
+    //    }
+    //  }
 
     //trace("Bottom Up, frame "+(frames.length+1));
     //print_samples(frame_data.prof_bottom_up);
@@ -368,9 +369,9 @@ class FLMSession {
   private function collate_alloc_data(frame_data:Dynamic):Void
   {
     //trace(haxe.Json.stringify(frame_data.alloc, null, "  "));
-    var news:Array<Dynamic> = frame_data.alloc.newObject;
-    var updates:Array<Dynamic> = frame_data.alloc.updateObject;
-    var deletes:Array<Dynamic> = frame_data.alloc.deleteObject;
+    var news:Array<Dynamic> = frame_data.alloc.get("newObject");
+    var updates:Array<Dynamic> = frame_data.alloc.get("updateObject");
+    var deletes:Array<Dynamic> = frame_data.alloc.get("deleteObject");
 
     // Bottom-up objects by type
     var bottom_up = new StringMap<AllocData>();
@@ -378,24 +379,24 @@ class FLMSession {
     if (news!=null) {
       for (i in 0...news.length) {
         var item = news[i];
-        if (!bottom_up.exists(item.type)) bottom_up.set(item.type, new AllocData());
-        var ad:AllocData = bottom_up.get(item.type);
-        ad.total_size += item.size;
+        if (!bottom_up.exists(item.get("type"))) bottom_up.set(item.get("type"), new AllocData());
+        var ad:AllocData = bottom_up.get(item.get("type"));
+        ad.total_size += Std.parseInt(item.get("size"));
         ad.total_num++;
         //trace("collate allocation: "+item);
 
-        var id = Std.parseInt(item.stackid)-1;
+        var id = Std.parseInt(item.get("stackid"))-1;
         var callstack:Array<Int> = this.stack_maps[id];
         if (callstack==null) {
-          if (item.type!="[object Event]") trace("- warning: null callstack for "+item.type+" on frame id="+frame_data.id);
+          if (item.get("type")!="[object Event]") trace("- warning: null callstack for "+item.get("type")+" on frame id="+frame_data.id);
           continue;
         }
-        //trace(" - type "+item.type+", callstack="+callstack);
+        //trace(" - type "+item.get("type+", callstack="+callstack);
 
         var ptr:AllocData = ad;
         for (j in 0...callstack.length) {
           ptr = ptr.ensure_child(callstack[j]);
-          ptr.total_size += item.size;
+          ptr.total_size += Std.parseInt(item.get("size"));
           ptr.total_num++;
           ptr.callstack_id = callstack[j];
         }
@@ -654,7 +655,7 @@ class HXScoutClientGUI extends Sprite
             session.temp_running_mem.set(key, Reflect.field(frame.mem, key));
           }
           // Copy all keys back to each frame data for summary
-          Reflect.setField(frame.mem, key, session.temp_running_mem.exists(key) ? session.temp_running_mem.get(key) : 0);
+          frame.mem.set(key, session.temp_running_mem.exists(key) ? session.temp_running_mem.get(key) : 0);
         }
         //trace("mem debug:");
         //trace(frame.mem); // mem debug

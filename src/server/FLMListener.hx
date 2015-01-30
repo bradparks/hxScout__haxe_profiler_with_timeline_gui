@@ -95,7 +95,7 @@ class FLMListener {
         //}
 
         if (name=='.swf.name') {
-          client_writer.sendMessage(haxe.Json.stringify({session_name:data['value'], inst_id:inst_id}));
+          client_writer.sendMessage({session_name:data['value'], inst_id:inst_id});
         }
 
         // - - - - - - - - - - - -
@@ -251,8 +251,8 @@ class FLMListener {
           var offset = cur_frame.offset + cur_frame.duration.total;
           cur_frame.timing = null; // release timing events
           //Sys.stdout().writeString(cur_frame.to_json()+",\n");
-          client_writer.sendMessage(cur_frame.to_json());
-          frames.push(cur_frame);
+          client_writer.sendMessage(cur_frame.to_dyn());
+          //frames.push(cur_frame);
           cur_frame = new Frame(cur_frame.id+1, inst_id, offset);
         }
       }
@@ -301,9 +301,9 @@ class Frame {
 #end
   }
 
-  public function to_json():String
+  public function to_dyn():Dynamic
   {
-    return haxe.Json.stringify({
+    return {
       id:id,
       inst_id:inst_id,
       offset:offset,
@@ -317,7 +317,7 @@ class Frame {
       alloc:alloc,
       cpu:cpu,
       mem:mem
-    });
+    };
   }
 }
 

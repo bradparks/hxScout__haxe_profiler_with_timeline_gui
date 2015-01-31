@@ -189,7 +189,7 @@ class Main extends Sprite {
       trace("Will send telemetry on port "+output_port);
       var cfg = new hxtelemetry.HxTelemetry.Config();
       cfg.allocations = false;
-      cfg.socket_port = output_port;
+      cfg.port = output_port;
       cfg.app_name = "HxScout";
       var hxt = new hxtelemetry.HxTelemetry(cfg);
     }

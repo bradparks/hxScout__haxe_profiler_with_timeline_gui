@@ -21,6 +21,7 @@ class FLMListener {
   {
     var client_writer = Thread.readMessage(true);
     var port = Thread.readMessage(true);
+    var output_port = Thread.readMessage(true);
 
     trace("Starting FLM listener...");
     var s = new Socket();
@@ -35,9 +36,22 @@ class FLMListener {
     s.close();
     s = null;
 
+    var hxt:hxtelemetry.HxTelemetry = null;
+    if (output_port>0) {
+      trace("Will send bkg telemetry on port "+output_port);
+      var cfg = new hxtelemetry.HxTelemetry.Config();
+      cfg.allocations = true;
+      cfg.port = output_port;
+      cfg.app_name = "HxScout-FLMListener-"+inst_id;
+      cfg.singleton_instance = false;
+      cfg.auto_event_loop = false;
+      hxt = new hxtelemetry.HxTelemetry(cfg);
+    }
+
     var listener = Thread.create(FLMListener.start);
     listener.sendMessage(client_writer);
     listener.sendMessage(port);
+    listener.sendMessage(output_port);
 
     trace("Starting FLMListener["+inst_id+"]...");
 
@@ -75,6 +89,8 @@ class FLMListener {
         trace("Uh oh, rethrowing: "+e);
         throw e;
       }
+
+      if (hxt!=null) hxt.advance_frame();
 
       if (data!=null) {
         //trace(data);

@@ -165,9 +165,12 @@ class Main extends Sprite {
     center();
 
     var port:Int = (Sys.args().length>0 && Sys.args().indexOf('-p')>=0) ? Std.parseInt(Sys.args()[(Sys.args().indexOf('-p')+1)]) : 7934;
+    var output_port:Int = (Sys.args().length>0 && Sys.args().indexOf('-d')>=0) ? Std.parseInt(Sys.args()[(Sys.args().indexOf('-d')+1)]) : -1;
+
     var listener = cpp.vm.Thread.create(FLMListener.start);
     listener.sendMessage(cpp.vm.Thread.current());
     listener.sendMessage(port);
+    listener.sendMessage(output_port);
 
     function on_enter_frame(e:Event):Void
     {
@@ -188,7 +191,7 @@ class Main extends Sprite {
     if (output_port>0) {
       trace("Will send telemetry on port "+output_port);
       var cfg = new hxtelemetry.HxTelemetry.Config();
-      cfg.allocations = false;
+      //cfg.allocations = false;
       cfg.port = output_port;
       cfg.app_name = "HxScout";
       var hxt = new hxtelemetry.HxTelemetry(cfg);

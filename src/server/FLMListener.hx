@@ -139,9 +139,9 @@ class FLMListener {
             }
             case "newObject": {
               //if (!cur_frame.alloc.exists(type)) cur_frame.alloc.set(type, new Array<Dynamic>());
-              var n:NewAlloc = data["value"];
-              cur_frame.alloc_new.push(n);
               //cur_frame.alloc.get(type).push(data["value"]);
+              var n:NewAlloc = amf_mode ? data["value"] : cast(data);
+              cur_frame.alloc_new.push(n);
             }
           }
           // newObject, deleteObject, updateObject

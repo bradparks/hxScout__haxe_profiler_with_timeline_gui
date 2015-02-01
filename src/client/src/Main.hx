@@ -281,7 +281,7 @@ typedef UIState = {
 
 class FLMSession {
 
-  public var frames:Array<Dynamic> = [];
+  public var frames:Array<FLMListener.Frame> = [];
   public var inst_id:String;
   public var temp_running_mem:StringMap<Int>;
   public var name:String;
@@ -296,12 +296,14 @@ class FLMSession {
     name = inst_id;
   }
 
-  public function receive_frame_data(frame_data)
+  public function receive_frame_data(data:Dynamic)
   {
-    if (frame_data.session_name!=null) {
-      name = frame_data.session_name;
+    if (data.session_name!=null) {
+      name = data.session_name;
       return; // Not really frame data...
     }
+
+    var frame_data:FLMListener.Frame = data;
 
     // For profiler samples && memory allocation stacks...
     if (frame_data.push_stack_strings!=null) {
@@ -320,12 +322,12 @@ class FLMSession {
     }
 
     if (frame_data.samples!=null) collate_sample_data(frame_data);
-    if (frame_data.alloc!=null) collate_alloc_data(frame_data);
+    if (frame_data.alloc_new!=null) collate_alloc_data(frame_data);
 
     frames.push(frame_data);
   }
 
-  private function collate_sample_data(frame_data:Dynamic):Void
+  private function collate_sample_data(frame_data:FLMListener.Frame):Void
   {
     //trace(haxe.Json.stringify(frame_data.samples, null, "  "));
     var samples:Array<Dynamic> = frame_data.samples;
@@ -369,26 +371,26 @@ class FLMSession {
     //print_samples(frame_data.prof_bottom_up);
   }
 
-  private function collate_alloc_data(frame_data:Dynamic):Void
+  private function collate_alloc_data(frame_data:FLMListener.Frame):Void
   {
     //trace(haxe.Json.stringify(frame_data.alloc, null, "  "));
-    var news:Array<Dynamic> = frame_data.alloc.newObject;
-    var updates:Array<Dynamic> = frame_data.alloc.updateObject;
-    var deletes:Array<Dynamic> = frame_data.alloc.deleteObject;
+    var news:Array<FLMListener.NewAlloc> = frame_data.alloc_new;
+    //var updates:Array<Dynamic> = frame_data.alloc.updateObject;
+    //var deletes:Array<Dynamic> = frame_data.alloc.deleteObject;
 
     // Bottom-up objects by type
     var bottom_up = new StringMap<AllocData>();
     frame_data.alloc_bottom_up = bottom_up;
     if (news!=null) {
       for (i in 0...news.length) {
-        var item = news[i];
+        var item:FLMListener.NewAlloc = news[i];
         if (!bottom_up.exists(item.type)) bottom_up.set(item.type, new AllocData());
         var ad:AllocData = bottom_up.get(item.type);
-        ad.total_size += Std.parseInt(item.size);
+        ad.total_size += item.size;
         ad.total_num++;
         //trace("collate allocation: "+item);
 
-        var id = Std.parseInt(item.stackid)-1;
+        var id = item.stackid-1;
         var callstack:Array<Int> = this.stack_maps[id];
         if (callstack==null) {
           if (item.type!="[object Event]") trace("- warning: null callstack for "+item.type+" on frame id="+frame_data.id);
@@ -399,7 +401,7 @@ class FLMSession {
         var ptr:AllocData = ad;
         for (j in 0...callstack.length) {
           ptr = ptr.ensure_child(callstack[j]);
-          ptr.total_size += Std.parseInt(item.size);
+          ptr.total_size += item.size;
           ptr.total_num++;
           ptr.callstack_id = callstack[j];
         }

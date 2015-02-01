@@ -333,8 +333,8 @@ class FLMSession {
     var top_down = new SampleData();
     frame_data.prof_top_down = top_down;
     for (sample in samples) {
-      var numticks:Int = sample.get("numticks");
-      var callstack:Array<Dynamic> = sample.get("callstack");
+      var numticks:Int = sample.numticks;
+      var callstack:Array<Dynamic> = sample.callstack;
       var ptr:SampleData = top_down;
       var i:Int = callstack.length;
       while ((--i)>=0) {
@@ -372,9 +372,9 @@ class FLMSession {
   private function collate_alloc_data(frame_data:Dynamic):Void
   {
     //trace(haxe.Json.stringify(frame_data.alloc, null, "  "));
-    var news:Array<Dynamic> = frame_data.alloc.get("newObject");
-    var updates:Array<Dynamic> = frame_data.alloc.get("updateObject");
-    var deletes:Array<Dynamic> = frame_data.alloc.get("deleteObject");
+    var news:Array<Dynamic> = frame_data.alloc.newObject;
+    var updates:Array<Dynamic> = frame_data.alloc.updateObject;
+    var deletes:Array<Dynamic> = frame_data.alloc.deleteObject;
 
     // Bottom-up objects by type
     var bottom_up = new StringMap<AllocData>();
@@ -382,24 +382,24 @@ class FLMSession {
     if (news!=null) {
       for (i in 0...news.length) {
         var item = news[i];
-        if (!bottom_up.exists(item.get("type"))) bottom_up.set(item.get("type"), new AllocData());
-        var ad:AllocData = bottom_up.get(item.get("type"));
-        ad.total_size += Std.parseInt(item.get("size"));
+        if (!bottom_up.exists(item.type)) bottom_up.set(item.type, new AllocData());
+        var ad:AllocData = bottom_up.get(item.type);
+        ad.total_size += Std.parseInt(item.size);
         ad.total_num++;
         //trace("collate allocation: "+item);
 
-        var id = Std.parseInt(item.get("stackid"))-1;
+        var id = Std.parseInt(item.stackid)-1;
         var callstack:Array<Int> = this.stack_maps[id];
         if (callstack==null) {
-          if (item.get("type")!="[object Event]") trace("- warning: null callstack for "+item.get("type")+" on frame id="+frame_data.id);
+          if (item.type!="[object Event]") trace("- warning: null callstack for "+item.type+" on frame id="+frame_data.id);
           continue;
         }
-        //trace(" - type "+item.get("type+", callstack="+callstack);
+        //trace(" - type "+item.type+", callstack="+callstack);
 
         var ptr:AllocData = ad;
         for (j in 0...callstack.length) {
           ptr = ptr.ensure_child(callstack[j]);
-          ptr.total_size += Std.parseInt(item.get("size"));
+          ptr.total_size += Std.parseInt(item.size);
           ptr.total_num++;
           ptr.callstack_id = callstack[j];
         }

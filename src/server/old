@@ -5,7 +5,6 @@ import amf.io.Amf3Reader;
 import cpp.vm.Thread;
 import haxe.io.*;
 import haxe.ds.StringMap;
-import haxe.ds.IntMap;
 
 typedef Timing = {
   var delta:Int;
@@ -33,11 +32,10 @@ class FLMListener {
     var flm_socket : Socket = s.accept();
     var inst_id:Int = (next_inst_id++);
 
-    // Are we supposed to close the "parent" socket?
+    // Launch next listener
     s.close();
     s = null;
 
-    // Optional hxt output
     var hxt:hxtelemetry.HxTelemetry = null;
     if (output_port>0) {
       trace("Will send bkg telemetry on port "+output_port);
@@ -50,62 +48,75 @@ class FLMListener {
       hxt = new hxtelemetry.HxTelemetry(cfg);
     }
 
-    // Launch next listener
-    var listener = Thread.create(FLMListener.start);
-    listener.sendMessage(client_writer);
-    listener.sendMessage(port);
-    listener.sendMessage(output_port);
+    //var listener = Thread.create(FLMListener.start);
+    //listener.sendMessage(client_writer);
+    //listener.sendMessage(port);
+    //listener.sendMessage(output_port);
 
     trace("Starting FLMListener["+inst_id+"]...");
 
+    //var frames:Array<Frame> = [];
     var cur_frame = new Frame(0, inst_id);
     var delta:Int = 0;
     var next_is_as = false;
+    // var stack_strings:Array<String> = ["1-indexed"];
 
-    var amf_mode:Bool = true; //false;
-    var reader = new Amf3Reader(flm_socket.input);
+    var frame_data_length:Int = 0;
+
+    var amf_mode:Bool = false;
+    var reader = null; //new Amf3Reader(flm_socket.input);
     var connected = true;
+    trace("connected...");
 
-    function send_message(data:Dynamic)
-    {
-      client_writer.sendMessage(data);
-    }
+    trace("Wait for read0...");
 
     while( connected ) {
 
       // Read next event blob.
-      var data:Object<Dynamic>;
-      try {
+      var data:Dynamic = null; //Map<String, Dynamic> = null;
+      //try {
         //trace("About to read data on inst "+inst_id);
         if (amf_mode) {
-          var m:Map<String, Dynamic> = reader.read();
-          data = new Object<Dynamic>();
-          for (key in m.keys()) {
-            data[key] = m.get(key);
-          }
+          data = reader.read();
         } else {
           var msg:String = flm_socket.input.readString(flm_socket.input.readInt32());
           data = haxe.Unserializer.run(msg);
+          trace(data.name);
+          //trace(dyn);
+          //data = new Map<String, Dynamic>();
+          //for (key in Reflect.fields(dyn)) {
+          //  data[key] = Reflect.field(dyn, key);
+          //}
+
+          //if (flm_socket.bytesAvailable>4 && frame_data_length==0) {
+          //  frame_data_length = flm_socket.readInt();
+          //}
+          //if (server.bytesAvailable>=frame_data_length && frame_data_length>0) {
+          //  data = haxe.Unserializer.run(flm_socket.readUTFBytes(frame_data_length));
+          //  frame_data_length = 0;
+          //} else {
+          //  data = null;
+          //}
         }
-      } catch( e:Dynamic) {
-        // Handle EOF gracefully
-        if (Type.getClass(e)==haxe.io.Eof) {
-          trace("FLMListener["+inst_id+"] closing...");
-          connected = false;
-          flm_socket.close();
-          break;
-        }
-        // Handle flash requests for policy file
-        if ((e+"").indexOf("type-marker: 60")>0) {
-          trace("Got flash policy file request, writing response...");
-          flm_socket.input.readUntil(0);
-          FLMUtil.send_policy_file(cast(flm_socket));
-          break;
-        }
-        // Other errors, rethrow
-        trace("Uh oh, rethrowing: "+e);
-        throw e;
-      }
+      //} catch( e:Dynamic) {
+      //  // Handle EOF gracefully
+      //  if (Type.getClass(e)==haxe.io.Eof) {
+      //    trace("FLMListener["+inst_id+"] closing...");
+      //    connected = false;
+      //    flm_socket.close();
+      //    break;
+      //  }
+      //  // Handle flash requests for policy file
+      //  if ((e+"").indexOf("type-marker: 60")>0) {
+      //    trace("Got flash policy file request, writing response...");
+      //    flm_socket.input.readUntil(0);
+      //    FLMUtil.send_policy_file(cast(flm_socket));
+      //    break;
+      //  }
+      //  // Other errors, rethrow
+      //  trace("Uh oh, rethrowing: "+e);
+      //  throw e;
+      //}
 
       if (hxt!=null) hxt.advance_frame();
 
@@ -130,7 +141,7 @@ class FLMListener {
         //}
 
         if (name=='.swf.name') {
-          send_message({session_name:data['value'], inst_id:inst_id});
+          client_writer.sendMessage({session_name:data['value'], inst_id:inst_id});
           if (data['hxt']) {
             trace("HXT, switching to haxe.Serializer...");
             amf_mode = false;
@@ -279,9 +290,10 @@ class FLMListener {
             //}
           }
           else if (name==".sampler.sample") {
-            var value:Dynamic = data["value"];
-            if (cur_frame.samples==null) cur_frame.samples = new Array<Dynamic>();
+            var value:Map<String,Dynamic> = data["value"];
+            if (cur_frame.samples==null) cur_frame.samples = [];
             cur_frame.samples.push(value);
+            //trace(value);
           }
         }
 
@@ -289,7 +301,8 @@ class FLMListener {
           var offset = cur_frame.offset + cur_frame.duration.total;
           cur_frame.timing = null; // release timing events
           //Sys.stdout().writeString(cur_frame.to_json()+",\n");
-          send_message(cur_frame);
+          client_writer.sendMessage(cur_frame);
+          //frames.push(cur_frame);
           cur_frame = new Frame(cur_frame.id+1, inst_id, offset);
         }
       }
@@ -306,7 +319,7 @@ class Frame {
   public var inst_id:Int;
   public var id:Int;
   public var offset:Int;
-  public var duration:Dynamic;
+  public var duration:IntMap;
   public var mem:Map<String, Int>;
   public var samples:Array<Dynamic>;
   public var push_stack_strings:Array<String>;
@@ -314,10 +327,6 @@ class Frame {
   public var cpu:Float;
   public var alloc:StringMap<Array<Dynamic>>;
   //public var events:Array<Dynamic>;
-
-  public var prof_top_down:Dynamic;
-  public var alloc_bottom_up:Dynamic;
-
 #if DEBUG_UNKNOWN
   public var unknown_names:Array<String>;
 #end
@@ -371,35 +380,3 @@ class Frame {
 // {"name":".player.abcdecode"} --> Preparing ActionScript ByteCode
 // {"name":".network.loadmovie","value":"app:/Main.swf"} --> Loading SWF: app:/Main.swf
 
-abstract Object<T>(Dynamic<T>) from Dynamic<T> {
-
-    public inline function new() {
-        this = {};
-    }
-
-    @:arrayAccess
-    public inline function set(key:String, value:T):Void {
-        Reflect.setField(this, key, value);
-    }
-
-    @:arrayAccess
-    public inline function get(key:String):Null<T> {
-        #if js
-        return untyped this[key];
-        #else
-        return Reflect.field(this, key);
-        #end
-    }
-
-    public inline function exists(key:String):Bool {
-        return Reflect.hasField(this, key);
-    }
-
-    public inline function remove(key:String):Bool {
-        return Reflect.deleteField(this, key);
-    }
-
-    public inline function keys():Array<String> {
-        return Reflect.fields(this);
-    }
-}

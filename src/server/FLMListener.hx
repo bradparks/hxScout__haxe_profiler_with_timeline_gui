@@ -14,6 +14,17 @@ typedef Timing = {
   var prev:Timing;
 }
 
+typedef NewAlloc = { // aka struct
+  var size:Int;
+  var type:String;
+  var stackid:Int;
+  var id:Int;
+}
+
+typedef SampleRaw = { // aka struct
+  var numticks:Int;
+  var callstack:Array<Int>;
+}
 
 class FLMListener {
 
@@ -78,12 +89,9 @@ class FLMListener {
       try {
         //trace("About to read data on inst "+inst_id);
         if (amf_mode) {
-          var m:Map<String, Dynamic> = reader.read();
-          data = new Object<Dynamic>();
-          for (key in m.keys()) {
-            data[key] = m.get(key);
-            if (key=="hxt" && data[key]) amf_mode = false;
-          }
+          var m:StringMap<Dynamic> = reader.read();
+          if (m.exists("hxt") && m.get("hxt")) amf_mode = false;
+          data = m;
         } else {
           var msg:String = flm_socket.input.readString(flm_socket.input.readInt32());
           data = haxe.Unserializer.run(msg);
@@ -140,7 +148,7 @@ class FLMListener {
             case "newObject": {
               //if (!cur_frame.alloc.exists(type)) cur_frame.alloc.set(type, new Array<Dynamic>());
               //cur_frame.alloc.get(type).push(data["value"]);
-              var n:NewAlloc = amf_mode ? data["value"] : cast(data);
+              var n:NewAlloc = data["value"]!=null ? data["value"] : cast(data);
               cur_frame.alloc_new.push(n);
             }
           }
@@ -281,9 +289,9 @@ class FLMListener {
               //}
             }
             else if (name==".sampler.sample") {
-              var value:Dynamic = data["value"];
-              if (cur_frame.samples==null) cur_frame.samples = new Array<Dynamic>();
-              cur_frame.samples.push(value);
+              if (cur_frame.samples==null) cur_frame.samples = new Array<SampleRaw>();
+              var s:SampleRaw = data["value"];
+              cur_frame.samples.push(s);
             }
           }
 
@@ -306,20 +314,13 @@ class FLMListener {
   }
 }
 
-typedef NewAlloc = { // aka struct
-  var size:Int;
-  var type:String;
-  var stackid:Int;
-  var id:Int;
-}
-
 class Frame {
   public var inst_id:Int;
   public var id:Int;
   public var offset:Int;
   public var duration:Dynamic;
   public var mem:Map<String, Int>;
-  public var samples:Array<Dynamic>;
+  public var samples:Array<SampleRaw>;
   public var push_stack_strings:Array<String>;
   public var push_stack_maps:Array<Array<Int>>;
   public var cpu:Float;
@@ -401,6 +402,17 @@ abstract Object<T>(Dynamic<T>) from Dynamic<T> {
         #else
         return Reflect.field(this, key);
         #end
+    }
+
+    @:from static public inline function fromStringMap(m:StringMap<T>) {
+      var data = new Object<Dynamic>();
+      for (key in m.keys()) {
+        data[key] = m.get(key);
+        if (Type.getClass(data[key])==haxe.ds.StringMap) {
+          data[key] = fromStringMap(m.get(key));
+        }
+      }
+      return data;
     }
 
     public inline function exists(key:String):Bool {

@@ -330,13 +330,13 @@ class FLMSession {
   private function collate_sample_data(frame_data:FLMListener.Frame):Void
   {
     //trace(haxe.Json.stringify(frame_data.samples, null, "  "));
-    var samples:Array<Dynamic> = frame_data.samples;
+    var samples:Array<FLMListener.SampleRaw> = frame_data.samples;
 
     var top_down = new SampleData();
     frame_data.prof_top_down = top_down;
     for (sample in samples) {
       var numticks:Int = sample.numticks;
-      var callstack:Array<Dynamic> = sample.callstack;
+      var callstack:Array<Int> = sample.callstack;
       var ptr:SampleData = top_down;
       var i:Int = callstack.length;
       while ((--i)>=0) {

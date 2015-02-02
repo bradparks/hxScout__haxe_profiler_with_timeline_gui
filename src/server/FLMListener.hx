@@ -21,6 +21,10 @@ typedef NewAlloc = { // aka struct
   var id:Int;
 }
 
+typedef DelAlloc = { // aka struct
+  var id:Int;
+}
+
 typedef SampleRaw = { // aka struct
   var numticks:Int;
   var callstack:Array<Int>;
@@ -146,10 +150,14 @@ class FLMListener {
               //trace(cur_frame.push_stack_maps);
             }
             case "newObject": {
-              //if (!cur_frame.alloc.exists(type)) cur_frame.alloc.set(type, new Array<Dynamic>());
-              //cur_frame.alloc.get(type).push(data["value"]);
+              // HXTelemetry collapses value into root object
               var n:NewAlloc = data["value"]!=null ? data["value"] : cast(data);
               cur_frame.alloc_new.push(n);
+            }
+            case "deleteObject": {
+              // HXTelemetry collapses value into root object
+              var d:DelAlloc = data["value"]!=null ? data["value"] : cast(data);
+              cur_frame.alloc_del.push(d);
             }
           }
           // newObject, deleteObject, updateObject
@@ -326,6 +334,7 @@ class Frame {
   public var cpu:Float;
   //public var alloc:StringMap<Array<Dynamic>>;
   public var alloc_new:Array<NewAlloc>;
+  public var alloc_del:Array<DelAlloc>;
   //public var events:Array<Dynamic>;
 
   public var prof_top_down:Dynamic;
@@ -355,32 +364,15 @@ class Frame {
     push_stack_maps = null;
     cpu = 0;
     alloc_new = new Array<NewAlloc>();
+    alloc_del = new Array<DelAlloc>();
 #if DEBUG_UNKNOWN
     unknown_names = [];
 #end
   }
 
-  //public function to_dyn():Dynamic
-  //{
-  //  return {
-  //    id:id,
-  //    inst_id:inst_id,
-  //    offset:offset,
-  //#if DEBUG_UNKNOWN
-  //    unknown_names:unknown_names,
-  //#end
-  //    duration:duration,
-  //    push_stack_strings:push_stack_strings,
-  //    push_stack_maps:push_stack_maps,
-  //    samples:samples,
-  //    alloc:alloc,
-  //    cpu:cpu,
-  //    mem:mem
-  //  };
-  //}
 }
 
-// Naming Notes (in Activity Sequence):
+// Scout Naming Notes (in Activity Sequence):
 // {"name":".player.abcdecode"} --> Preparing ActionScript ByteCode
 // {"name":".network.loadmovie","value":"app:/Main.swf"} --> Loading SWF: app:/Main.swf
 

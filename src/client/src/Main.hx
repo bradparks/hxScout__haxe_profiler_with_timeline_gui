@@ -5,6 +5,7 @@ import flash.events.*;
 
 import openfl.net.Socket;
 import haxe.ds.StringMap;
+import haxe.ds.IntMap;
 
 class Main extends Sprite {
 
@@ -279,6 +280,11 @@ typedef UIState = {
   sel_end:Int,
 };
 
+typedef CollatedDealloc = {
+  total:Int,
+  size:Int
+};
+
 class FLMSession {
 
   public var frames:Array<FLMListener.Frame> = [];
@@ -289,6 +295,13 @@ class FLMSession {
   public var stack_maps:Array<Array<Int>> = new Array<Array<Int>>();
   public var ses_tile:Sprite;
   public var ui_state:UIState;
+
+  // Allocation IDs are actually, memory addresses, which can be reused,
+  // so map them to guid's as soon as they arrive.
+  private var alloc_guid:Int = 1;
+  // This lookup can only be used as soon as the data arrives.
+  public var alloc_id_to_guid:IntMap<Int> = new IntMap<Int>();
+  public var alloc_guid_to_newalloc:IntMap<FLMListener.NewAlloc> = new IntMap<FLMListener.NewAlloc>();
 
   public function new(iid:String)
   {
@@ -321,8 +334,8 @@ class FLMSession {
       }
     }
 
-    if (frame_data.samples!=null) collate_sample_data(frame_data);
-    if (frame_data.alloc_new!=null) collate_alloc_data(frame_data);
+    if (frame_data.samples!=null && frame_data.samples.length>0) collate_sample_data(frame_data);
+    if (frame_data.alloc_del.length>0 || frame_data.alloc_new.length>0) collate_alloc_data(frame_data);
 
     frames.push(frame_data);
   }
@@ -376,7 +389,7 @@ class FLMSession {
     //trace(haxe.Json.stringify(frame_data.alloc, null, "  "));
     var news:Array<FLMListener.NewAlloc> = frame_data.alloc_new;
     //var updates:Array<Dynamic> = frame_data.alloc.updateObject;
-    //var deletes:Array<Dynamic> = frame_data.alloc.deleteObject;
+    var dels:Array<FLMListener.DelAlloc> = frame_data.alloc_del;
 
     // Bottom-up objects by type
     var bottom_up = new StringMap<AllocData>();
@@ -389,6 +402,13 @@ class FLMSession {
         ad.total_size += item.size;
         ad.total_num++;
         //trace("collate allocation: "+item);
+
+        // Track with guid
+        if (!alloc_id_to_guid.exists(item.id)) {
+          item.guid = (alloc_guid++);
+          alloc_id_to_guid.set(item.id, item.guid);
+          alloc_guid_to_newalloc.set(item.guid, item);
+        }
 
         var id = item.stackid-1;
         var callstack:Array<Int> = this.stack_maps[id];
@@ -405,6 +425,13 @@ class FLMSession {
           ptr.total_num++;
           ptr.callstack_id = callstack[j];
         }
+      }
+    }
+
+    if (dels!=null) {
+      for (del in dels) {
+        // Convert ID to GUID, allocs guaranteed already seen
+        del.guid = alloc_id_to_guid.get(del.id);
       }
     }
 
@@ -1342,10 +1369,75 @@ class SelectionController {
 
     }
 
+
+    // - - - - - - - - - - - - - - -
+    // - - Alloc pane deallocs (temp) - -
+    // - - - - - - - - - - - - - - -
+    if (true && alloc_pane.visible) {
+
+      var deallocs:StringMap<CollatedDealloc> = new StringMap<CollatedDealloc>();
+      var total:Int = 0;
+      var total_size:Int = 0;
+      each_frame(function(f:FLMListener.Frame) {
+        for (i in 0...f.alloc_del.length) {
+          var d = f.alloc_del[i];
+          var item:FLMListener.NewAlloc = session.alloc_guid_to_newalloc.get(d.guid);
+          var type = item.type+"";
+          if (!deallocs.exists(type)) {
+            deallocs.set(type, {total:0,size:0});
+          }
+          var cd = deallocs.get(type);
+          total++;
+          cd.total++;
+          total_size += item.size;
+          cd.size += item.size;
+        }
+      });
+
+      if (total>0) {
+        y = 0;
+        for (type in deallocs.keys()) {
+          var cd = deallocs.get(type);
+
+          // type name formatting
+          if (type.substr(0,7)=='[object') type = type.substr(8, type.length-9);
+          if (type.substr(0,6)=='[class') type = type.substr(7, type.length-8);
+          type = (~/\$$/).replace(type, ' <static>');
+          var clo = type.indexOf('::');
+          if (clo>=0) {
+            type = 'Closure ['+type.substr(clo+2)+' ('+type.substr(0,clo)+')]';
+          }
+
+          var lbl = Util.make_label(type, 12, 0x227788);
+          var cont = new Sprite();
+          cont.y = y;
+          cont.x = 15;
+          cont.addChild(lbl);
+          alloc_pane.cont.addChild(cont);
+
+          inline function draw_pct(cont, val:Int, total:Int, offset:Float) {
+            var unit:Int = Math.floor(val*100/total);
+
+            var num = Util.make_label((val==0)?"< 1" : Util.add_commas(val), 12, 0xeeeeee);
+            num.x = offset - 70 - num.width;
+            cont.addChild(num);
+
+            var numpctunit = Util.make_label(unit+" %", 12, 0xeeeeee);
+            numpctunit.x = offset - 25 - numpctunit.width;
+            cont.addChild(numpctunit);
+          }
+          draw_pct(cont, cd.total, total, alloc_pane.innerWidth-120);
+          draw_pct(cont, Math.round(cd.size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10);
+
+          y += lbl.height;
+        }
+      }
+    }
+
     // - - - - - - - - - - - - - - -
     // - - Alloc pane - -
     // - - - - - - - - - - - - - - -
-    if (alloc_pane.visible) {
+    if (false && alloc_pane.visible) {
 
       var allocs:StringMap<AllocData> = new StringMap<AllocData>();
       var total_num = 0;
@@ -1475,9 +1567,8 @@ class SelectionController {
           //  alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,stack.height);
           //}
         }
-
       }
-    }
+    } // if (alloc_pane.visible)
 
   }
 }

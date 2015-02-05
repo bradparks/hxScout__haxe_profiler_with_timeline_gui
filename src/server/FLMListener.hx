@@ -19,10 +19,12 @@ typedef NewAlloc = { // aka struct
   var type:String;
   var stackid:Int;
   var id:Int;
+  var guid:Int;
 }
 
 typedef DelAlloc = { // aka struct
   var id:Int;
+  var guid:Int;
 }
 
 typedef SampleRaw = { // aka struct
@@ -297,7 +299,6 @@ class FLMListener {
               //}
             }
             else if (name==".sampler.sample") {
-              if (cur_frame.samples==null) cur_frame.samples = new Array<SampleRaw>();
               var s:SampleRaw = data["value"];
               cur_frame.samples.push(s);
             }
@@ -363,6 +364,8 @@ class Frame {
     push_stack_strings = null;
     push_stack_maps = null;
     cpu = 0;
+    // TODO: conditional allocation based on enabled metrics
+    samples = new Array<SampleRaw>();
     alloc_new = new Array<NewAlloc>();
     alloc_del = new Array<DelAlloc>();
 #if DEBUG_UNKNOWN

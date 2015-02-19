@@ -1373,7 +1373,7 @@ class SelectionController {
     // - - - - - - - - - - - - - - -
     // - - Alloc pane deallocs (temp) - -
     // - - - - - - - - - - - - - - -
-    if (true && alloc_pane.visible) {
+    if (false && alloc_pane.visible) {
 
       var deallocs:StringMap<CollatedDealloc> = new StringMap<CollatedDealloc>();
       var total:Int = 0;
@@ -1437,7 +1437,7 @@ class SelectionController {
     // - - - - - - - - - - - - - - -
     // - - Alloc pane - -
     // - - - - - - - - - - - - - - -
-    if (false && alloc_pane.visible) {
+    if (true && alloc_pane.visible) {
 
       var allocs:StringMap<AllocData> = new StringMap<AllocData>();
       var total_num = 0;

@@ -88,15 +88,212 @@ class FLMListener {
       client_writer.sendMessage(data);
     }
 
+    function handle_data(data:Object<Dynamic>)
+    {
+			//trace(data);
+			var name:String = cast(data['name'], String);
+
+			// - - - - - - - - - - - -
+			// Object allocations
+			// - - - - - - - - - - - -
+			if (name.indexOf(".memory.")==0) {
+				var type:String = name.substr(8);
+
+				switch(type) {
+					case "stackIdMap": {
+						var maps:Array<Int> = data["value"]; // len, val, val, val, len, val, ...
+						if (cur_frame.push_stack_maps==null) cur_frame.push_stack_maps = new Array<Array<Int>>();
+						//trace("Push maps: "+maps);
+						var len = maps[0];
+						cur_frame.push_stack_maps.push(new Array<Int>());
+						for (i in 1...maps.length) {
+							if (len-- == 0) {
+								len = maps[i];
+								cur_frame.push_stack_maps.push(new Array<Int>());
+							} else {
+								cur_frame.push_stack_maps[cur_frame.push_stack_maps.length-1].push(maps[i]);
+							}
+						}
+						//trace(cur_frame.push_stack_maps);
+					}
+					case "newObject": {
+						// HXTelemetry collapses value into root object
+						var n:NewAlloc = data["value"]!=null ? data["value"] : cast(data);
+						cur_frame.alloc_new.push(n);
+					}
+					case "deleteObject": {
+						// HXTelemetry collapses value into root object
+						var d:DelAlloc = data["value"]!=null ? data["value"] : cast(data);
+						cur_frame.alloc_del.push(d);
+					}
+				}
+				// newObject, deleteObject, updateObject
+			} else {
+
+				//if (name.indexOf('::')>0) {
+				//	//trace(data);
+				//	//trace(" -- Stack:");
+				//	//trace(data['name']);
+				//	//trace(Type.getClass(data['name']));
+				//	//trace(Reflect.fields(data['name']));
+				// 
+				//	var bytes = haxe.io.Bytes.ofString(data["name"]);
+				//	var msg = "";
+				//	for (i in 0...bytes.length) {
+				//		var b = bytes.get(i);
+				//		if (b>=32 && b<=126) msg += String.fromCharCode(b); else msg += "%"+StringTools.hex(b, 2);
+				//	}
+				//	trace(msg);
+				//}
+	 
+				if (name=='.swf.name') {
+					send_message({session_name:data['value'], inst_id:inst_id});
+				}
+	 
+				// - - - - - - - - - - - -
+				// Timing / Span / Delta
+				// - - - - - - - - - - - -
+				if (data['delta']!=null) {
+					// Delta without a span implies span = 0 ?
+					var t:Timing = { delta:data['delta'], span:data['span']==null?0:data['span'], prev:null, self_time:0 };
+	 
+					cur_frame.duration.total += t.delta;
+	 
+					if (t.span>cur_frame.duration.total) {
+						if (name!='.network.localconnection.idle' &&
+								name!='.rend.screen') {
+							trace("??? Event larger ("+t.span+") than current frame ("+cur_frame.duration.total+"): "+data);
+						}
+					}
+	 
+					var self_time = t.span;
+					var lookback = t.span-t.delta;
+					//trace("- Considering: "+data+", self="+self_time+", lookback="+lookback+" -- t="+t);
+					var tref:Timing = cur_frame.timing;
+					while (lookback>0 && tref!=null) {
+						if (lookback>=tref.delta) {
+							self_time -= tref.delta;
+						} else if (lookback>=tref.span) {
+							self_time -= tref.span;
+						} else {
+							//trace("	 -- does not include ("+tref.delta+"), dropping lookback to "+(lookback-tref.delta));
+						}
+						lookback -= tref.delta;
+						tref = tref.prev;
+					}
+					t.prev = cur_frame.timing;
+					t.self_time = self_time;
+					cur_frame.timing = t;
+	 
+					//trace("	 -- Final self time: "+self_time);
+					if (self_time<0) throw "Umm, can't have negative self time!!";
+	 
+					trace("	 -- "+name+": "+self_time);
+	 
+					//if (next_is_as) trace("next_is_as on: "+name);
+	 
+					if (next_is_as || name.indexOf(".as.")==0) cur_frame.duration.as += self_time;
+					else if (name.indexOf(".gc.")==0) cur_frame.duration.gc += self_time;
+					else if (name.indexOf(".exit")==0) cur_frame.duration.other += self_time;
+					else if (name.indexOf(".rend.")==0) cur_frame.duration.rend += self_time;
+					else if (name.indexOf(".other.")==0) cur_frame.duration.other += self_time;
+					else if (name.indexOf(".swf.")==0) cur_frame.duration.other += self_time;
+					else if (name.indexOf(".network.")==0) cur_frame.duration.net += self_time;
+					else {
+						cur_frame.duration.other += self_time;
+						cur_frame.duration.unknown += self_time;
+	#if DEBUG_UNKNOWN
+						var debug:String = data['name']+":"+self_time;
+						cur_frame.unknown_names.push(debug);
+	#end
+						//if (cur_frame.unknown_names.indexOf(data['name'])<0) cur_frame.unknown_names.push(data['name']);
+					}
+	 
+					// not sure should do it this way, maybe a list of event names instead?
+					next_is_as = name=='.as.event';
+	 
+				} else {
+					// Span shouldn't occur without a delta
+					if (data['span']!=null) throw( "Span without a delta on: "+data);
+				}
+	 
+				// - - - - - - - - - - - -
+				// Memory summary
+				// - - - - - - - - - - - -
+				if (name.indexOf(".mem.")==0 && data["value"]!=null) {
+					var type:String = name.substr(5);
+					//if (cur_frame.mem[type]==null) cur_frame.mem[type] = 0;
+					cur_frame.mem[type] = data["value"];
+				}
+	 
+				// - - - - - - - - - - - -
+				// CPU
+				// - - - - - - - - - - - -
+				if (name.indexOf(".player.cpu")==0) {
+					cur_frame.cpu = data["value"];
+				}
+
+				// - - - - - - - - - - - -
+				// Sampler
+				// - - - - - - - - - - - -
+				if (name.indexOf(".sampler.")==0) {
+					if (name==".sampler.methodNameMapArray") {
+						if (cur_frame.push_stack_strings==null) cur_frame.push_stack_strings = [];
+						var names:Array<String> = cast(data["value"]);
+						for (i in names) {
+							cur_frame.push_stack_strings.push(i);
+							//stack_strings.push(stack_string);
+						}
+					}
+					else if (name==".sampler.methodNameMap") {
+						if (cur_frame.push_stack_strings==null) cur_frame.push_stack_strings = [];
+						var bytes = cast(data["value"], haxe.io.Bytes);
+						var start=0;
+						for (i in 0...bytes.length) {
+							var b = bytes.get(i);
+							if (b==0) {
+								var stack_string:String = bytes.getString(start, i-start);
+								cur_frame.push_stack_strings.push(stack_string);
+								//stack_strings.push(stack_string);
+								start = i+1;
+							}
+						}
+						//trace("Frame "+cur_frame.inst_id+", Stack strings now: "+stack_strings.length);
+						//for (i in 0...stack_strings.length) {
+						//	trace(i+": "+stack_strings[i]);
+						//}
+					}
+					else if (name==".sampler.sample") {
+						var s:SampleRaw = data["value"];
+						cur_frame.samples.push(s);
+					}
+				}
+
+				if (name==".enter") {
+					var offset = cur_frame.offset + cur_frame.duration.total;
+					cur_frame.timing = null; // release timing events
+					//Sys.stdout().writeString(cur_frame.to_json()+",\n");
+					send_message(cur_frame);
+					cur_frame = new Frame(cur_frame.id+1, inst_id, offset);
+				}
+
+			} // not .memory.
+    }
+
+    function read_ints(num:Int, report:Bool=false) {
+      var r = "";
+      while (num-->0) {
+        var n:Int = flm_socket.input.readInt32();
+        if (report) { r+=", "+n; }
+      }
+      if (report) trace(r);
+    }
+
     while( connected ) {
 
       // Read next event blob.
       var data:Object<Dynamic> = null;
       try {
-
-        function read_ints(num:Int) {
-          while (num-->0) { flm_socket.input.readInt32(); }
-        }
 
         //trace("About to read data on inst "+inst_id);
         if (amf_mode) {
@@ -109,6 +306,7 @@ class FLMListener {
             case 1: { // serialized object
               var msg:String = flm_socket.input.readString(flm_socket.input.readInt32());
               data = haxe.Unserializer.run(msg);
+              //trace("Got HXT ser data, length="+msg.length);
             }
             case 10: { // names
               if (cur_frame.push_stack_strings==null) cur_frame.push_stack_strings = [];
@@ -118,11 +316,47 @@ class FLMListener {
                   flm_socket.input.readString(flm_socket.input.readInt32())
                 );
               }
-              trace("Got names: "+cur_frame.push_stack_strings);
             }
-            case 11: { read_ints(flm_socket.input.readInt32()); } // samples
-            case 12: { read_ints(flm_socket.input.readInt32()); } // stacks
-            case 13: { read_ints(flm_socket.input.readInt32()); } // allocations
+            case 11: { // samples
+              var num:Int = flm_socket.input.readInt32();
+              while (num>0) {
+                var s:SampleRaw = {
+                  numticks:0,
+                  callstack:new Array<Int>()
+                }
+                var size:Int = flm_socket.input.readInt32();
+                num -= size;
+                while (size-->0) {
+                  s.callstack.push(flm_socket.input.readInt32());
+                }
+                s.numticks = flm_socket.input.readInt32();
+                num -= 2;
+                cur_frame.samples.push(s);
+              }
+            }
+            case 12: { // stacks
+              var arr:Array<Int> = new Array<Int>();
+              var num:Int = flm_socket.input.readInt32();
+              while (num-->0) arr.push(flm_socket.input.readInt32());
+              data = new Object<Dynamic>();
+              data.set("name", ".memory.stackIdMap");
+              data.set("value", arr);
+              handle_data(data);
+            }
+            case 13: { // allocations
+              var num:Int = flm_socket.input.readInt32();
+              while (num>0) {
+                var n:NewAlloc = {
+                  id:flm_socket.input.readInt32(),
+                  type:"t:"+flm_socket.input.readInt32(),
+                  stackid:flm_socket.input.readInt32(),
+                  size:flm_socket.input.readInt32(),
+                  guid:0
+                }
+                cur_frame.alloc_new.push(n);
+                num -= 4;
+              }
+            }
             case 14: { read_ints(flm_socket.input.readInt32()); } // collections
           }
         }
@@ -148,197 +382,9 @@ class FLMListener {
 
       if (hxt!=null) hxt.advance_frame();
 
-      if (data!=null) {
-        //trace(data);
-        var name:String = cast(data['name'], String);
+      if (data!=null) handle_data(data);
 
-        // - - - - - - - - - - - -
-        // Object allocations
-        // - - - - - - - - - - - -
-        if (name.indexOf(".memory.")==0) {
-          var type:String = name.substr(8);
-
-          switch(type) {
-            case "stackIdMap": {
-              var maps:Array<Int> = data["value"]; // len, val, val, val, len, val, ...
-              if (cur_frame.push_stack_maps==null) cur_frame.push_stack_maps = new Array<Array<Int>>();
-              //trace("Push maps: "+maps);
-              var len = maps[0];
-              cur_frame.push_stack_maps.push(new Array<Int>());
-              for (i in 1...maps.length) {
-                if (len-- == 0) {
-                  len = maps[i];
-                  cur_frame.push_stack_maps.push(new Array<Int>());
-                } else {
-                  cur_frame.push_stack_maps[cur_frame.push_stack_maps.length-1].push(maps[i]);
-                }
-              }
-              //trace(cur_frame.push_stack_maps);
-            }
-            case "newObject": {
-              // HXTelemetry collapses value into root object
-              var n:NewAlloc = data["value"]!=null ? data["value"] : cast(data);
-              cur_frame.alloc_new.push(n);
-            }
-            case "deleteObject": {
-              // HXTelemetry collapses value into root object
-              var d:DelAlloc = data["value"]!=null ? data["value"] : cast(data);
-              cur_frame.alloc_del.push(d);
-            }
-          }
-          // newObject, deleteObject, updateObject
-        } else {
-
-          //if (name.indexOf('::')>0) {
-          //  //trace(data);
-          //  //trace(" -- Stack:");
-          //  //trace(data['name']);
-          //  //trace(Type.getClass(data['name']));
-          //  //trace(Reflect.fields(data['name']));
-          // 
-          //  var bytes = haxe.io.Bytes.ofString(data["name"]);
-          //  var msg = "";
-          //  for (i in 0...bytes.length) {
-          //    var b = bytes.get(i);
-          //    if (b>=32 && b<=126) msg += String.fromCharCode(b); else msg += "%"+StringTools.hex(b, 2);
-          //  }
-          //  trace(msg);
-          //}
-   
-          if (name=='.swf.name') {
-            send_message({session_name:data['value'], inst_id:inst_id});
-          }
-   
-          // - - - - - - - - - - - -
-          // Timing / Span / Delta
-          // - - - - - - - - - - - -
-          if (data['delta']!=null) {
-            // Delta without a span implies span = 0 ?
-            var t:Timing = { delta:data['delta'], span:data['span']==null?0:data['span'], prev:null, self_time:0 };
-   
-            cur_frame.duration.total += t.delta;
-   
-            if (t.span>cur_frame.duration.total) {
-              if (name!='.network.localconnection.idle' &&
-                  name!='.rend.screen') {
-                trace("??? Event larger ("+t.span+") than current frame ("+cur_frame.duration.total+"): "+data);
-              }
-            }
-   
-            var self_time = t.span;
-            var lookback = t.span-t.delta;
-            //trace("- Considering: "+data+", self="+self_time+", lookback="+lookback+" -- t="+t);
-            var tref:Timing = cur_frame.timing;
-            while (lookback>0 && tref!=null) {
-              if (lookback>=tref.delta) {
-                self_time -= tref.delta;
-              } else if (lookback>=tref.span) {
-                self_time -= tref.span;
-              } else {
-                //trace("	 -- does not include ("+tref.delta+"), dropping lookback to "+(lookback-tref.delta));
-              }
-              lookback -= tref.delta;
-              tref = tref.prev;
-            }
-            t.prev = cur_frame.timing;
-            t.self_time = self_time;
-            cur_frame.timing = t;
-   
-            //trace("	 -- Final self time: "+self_time);
-            if (self_time<0) throw "Umm, can't have negative self time!!";
-   
-            //trace("	 -- "+name+": "+self_time);
-   
-            //if (next_is_as) trace("next_is_as on: "+name);
-   
-            if (next_is_as || name.indexOf(".as.")==0) cur_frame.duration.as += self_time;
-            else if (name.indexOf(".gc.")==0) cur_frame.duration.gc += self_time;
-            else if (name.indexOf(".exit")==0) cur_frame.duration.other += self_time;
-            else if (name.indexOf(".rend.")==0) cur_frame.duration.rend += self_time;
-            else if (name.indexOf(".other.")==0) cur_frame.duration.other += self_time;
-            else if (name.indexOf(".swf.")==0) cur_frame.duration.other += self_time;
-            else if (name.indexOf(".network.")==0) cur_frame.duration.net += self_time;
-            else {
-              cur_frame.duration.other += self_time;
-              cur_frame.duration.unknown += self_time;
-  #if DEBUG_UNKNOWN
-              var debug:String = data['name']+":"+self_time;
-              cur_frame.unknown_names.push(debug);
-  #end
-              //if (cur_frame.unknown_names.indexOf(data['name'])<0) cur_frame.unknown_names.push(data['name']);
-            }
-   
-            // not sure should do it this way, maybe a list of event names instead?
-            next_is_as = name=='.as.event';
-   
-          } else {
-            // Span shouldn't occur without a delta
-            if (data['span']!=null) throw( "Span without a delta on: "+data);
-          }
-   
-          // - - - - - - - - - - - -
-          // Memory summary
-          // - - - - - - - - - - - -
-          if (name.indexOf(".mem.")==0 && data["value"]!=null) {
-            var type:String = name.substr(5);
-            //if (cur_frame.mem[type]==null) cur_frame.mem[type] = 0;
-            cur_frame.mem[type] = data["value"];
-          }
-   
-          // - - - - - - - - - - - -
-          // CPU
-          // - - - - - - - - - - - -
-          if (name.indexOf(".player.cpu")==0) {
-            cur_frame.cpu = data["value"];
-          }
-
-          // - - - - - - - - - - - -
-          // Sampler
-          // - - - - - - - - - - - -
-          if (name.indexOf(".sampler.")==0) {
-            if (name==".sampler.methodNameMapArray") {
-              if (cur_frame.push_stack_strings==null) cur_frame.push_stack_strings = [];
-              var names:Array<String> = cast(data["value"]);
-              for (i in names) {
-                cur_frame.push_stack_strings.push(i);
-                //stack_strings.push(stack_string);
-              }
-            }
-            else if (name==".sampler.methodNameMap") {
-              if (cur_frame.push_stack_strings==null) cur_frame.push_stack_strings = [];
-              var bytes = cast(data["value"], haxe.io.Bytes);
-              var start=0;
-              for (i in 0...bytes.length) {
-                var b = bytes.get(i);
-                if (b==0) {
-                  var stack_string:String = bytes.getString(start, i-start);
-                  cur_frame.push_stack_strings.push(stack_string);
-                  //stack_strings.push(stack_string);
-                  start = i+1;
-                }
-              }
-              //trace("Frame "+cur_frame.inst_id+", Stack strings now: "+stack_strings.length);
-              //for (i in 0...stack_strings.length) {
-              //  trace(i+": "+stack_strings[i]);
-              //}
-            }
-            else if (name==".sampler.sample") {
-              var s:SampleRaw = data["value"];
-              cur_frame.samples.push(s);
-            }
-          }
-
-          if (name==".enter") {
-            var offset = cur_frame.offset + cur_frame.duration.total;
-            cur_frame.timing = null; // release timing events
-            //Sys.stdout().writeString(cur_frame.to_json()+",\n");
-            send_message(cur_frame);
-            cur_frame = new Frame(cur_frame.id+1, inst_id, offset);
-          }
-
-        } // not .memory.
-      }
-    }
+    } // while (connected)
 
     flm_socket = null;
     client_writer = null;

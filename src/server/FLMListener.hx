@@ -155,7 +155,7 @@ class FLMListener {
         // - - - - - - - - - - - -
         // Object allocations
         // - - - - - - - - - - - -
-        if (name.indexOf(".memory.")==0) {
+        if (name.indexOf(".memory.")==0 && false) {
           var type:String = name.substr(8);
 
           switch(type) {
@@ -280,6 +280,7 @@ class FLMListener {
           // Memory summary
           // - - - - - - - - - - - -
           if (name.indexOf(".mem.")==0 && data["value"]!=null) {
+            //trace(data);
             var type:String = name.substr(5);
             //if (cur_frame.mem[type]==null) cur_frame.mem[type] = 0;
             cur_frame.mem[type] = data["value"];

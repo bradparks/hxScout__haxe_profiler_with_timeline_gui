@@ -673,18 +673,10 @@ class HXScoutClientGUI extends Sprite
     for (i in (last_frame_drawn+1)...session.frames.length) {
       var frame = session.frames[i];
 
-      if (Reflect.hasField(frame, "mem")) {
-        //for (key in Reflect.fields(frame.mem)) { //SelectionController.mem_keys) {
-        //  if (SelectionController.mem_keys.indexOf(key)<0) {
-        //    trace("!!!!!!!!!!!!!!!!!!!!!!!");
-        //    trace(key);
-        //    trace("!!!!!!!!!!!!!!!!!!!!!!!");
-        //    SelectionController.mem_keys.push(key);
-        //  }
-        //}
+      if (true) {
         for (key in SelectionController.mem_keys) {
-          if (Reflect.hasField(frame.mem, key)) {
-            session.temp_running_mem.set(key, Reflect.field(frame.mem, key));
+          if (frame.mem.exists(key)) {
+            session.temp_running_mem.set(key, frame.mem.get(key));
           }
           // Copy all keys back to each frame data for summary
           frame.mem.set(key, session.temp_running_mem.exists(key) ? session.temp_running_mem.get(key) : 0);
@@ -713,7 +705,7 @@ class HXScoutClientGUI extends Sprite
 
       if (!session.temp_running_mem.exists("total")) continue;
 
-      // trace(session.temp_running_mem); // mem debug
+      trace(session.temp_running_mem); // mem debug
 
       add_rect(i, memory_pane, session.temp_running_mem.get("total")/layout.mscale, 0x444444, false);             // Current Total Memory
       add_rect(i, memory_pane, session.temp_running_mem.get("telemetry.overhead")/layout.mscale, 0x667755, true); // In other?
@@ -1138,7 +1130,7 @@ class SelectionController {
       }
       for (key in mem_keys) {
         var info = Reflect.field(mem_info, key);
-        var val = Reflect.field(f.mem, key);
+        var val = f.mem.get(key);
         if (info!=null && Reflect.hasField(info, "redirect")) {
           key = Reflect.field(info, "redirect");
         }

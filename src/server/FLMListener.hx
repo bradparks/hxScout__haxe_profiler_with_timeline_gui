@@ -91,16 +91,40 @@ class FLMListener {
     while( connected ) {
 
       // Read next event blob.
-      var data:Object<Dynamic>;
+      var data:Object<Dynamic> = null;
       try {
+
+        function read_ints(num:Int) {
+          while (num-->0) { flm_socket.input.readInt32(); }
+        }
+
         //trace("About to read data on inst "+inst_id);
         if (amf_mode) {
           var m:StringMap<Dynamic> = reader.read();
           if (m.exists("hxt") && m.get("hxt")) amf_mode = false;
           data = m;
         } else {
-          var msg:String = flm_socket.input.readString(flm_socket.input.readInt32());
-          data = haxe.Unserializer.run(msg);
+          var type:Int = flm_socket.input.readByte();
+          switch(type) {
+            case 1: { // serialized object
+              var msg:String = flm_socket.input.readString(flm_socket.input.readInt32());
+              data = haxe.Unserializer.run(msg);
+            }
+            case 10: { // names
+              if (cur_frame.push_stack_strings==null) cur_frame.push_stack_strings = [];
+              var num:Int = flm_socket.input.readInt32();
+              for (i in 0...num) {
+                cur_frame.push_stack_strings.push(
+                  flm_socket.input.readString(flm_socket.input.readInt32())
+                );
+              }
+              trace("Got names: "+cur_frame.push_stack_strings);
+            }
+            case 11: { read_ints(flm_socket.input.readInt32()); } // samples
+            case 12: { read_ints(flm_socket.input.readInt32()); } // stacks
+            case 13: { read_ints(flm_socket.input.readInt32()); } // allocations
+            case 14: { read_ints(flm_socket.input.readInt32()); } // collections
+          }
         }
       } catch( e:Dynamic) {
         // Handle EOF gracefully

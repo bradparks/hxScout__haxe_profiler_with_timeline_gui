@@ -705,7 +705,7 @@ class HXScoutClientGUI extends Sprite
 
       if (!session.temp_running_mem.exists("total")) continue;
 
-      trace(session.temp_running_mem); // mem debug
+      //trace(session.temp_running_mem); // mem debug
 
       add_rect(i, memory_pane, session.temp_running_mem.get("total")/layout.mscale, 0x444444, false);             // Current Total Memory
       add_rect(i, memory_pane, session.temp_running_mem.get("telemetry.overhead")/layout.mscale, 0x667755, true); // In other?
@@ -1365,7 +1365,7 @@ class SelectionController {
     // - - - - - - - - - - - - - - -
     // - - Alloc pane deallocs (temp) - -
     // - - - - - - - - - - - - - - -
-    if (true && alloc_pane.visible) {
+    if (false && alloc_pane.visible) {
 
       var deallocs:StringMap<CollatedDealloc> = new StringMap<CollatedDealloc>();
       var total:Int = 0;
@@ -1429,7 +1429,7 @@ class SelectionController {
     // - - - - - - - - - - - - - - -
     // - - Alloc pane - -
     // - - - - - - - - - - - - - - -
-    if (false && alloc_pane.visible) {
+    if (true && alloc_pane.visible) {
 
       var allocs:StringMap<AllocData> = new StringMap<AllocData>();
       var total_num = 0;

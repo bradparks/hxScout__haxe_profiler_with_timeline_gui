@@ -392,7 +392,7 @@ class FLMSession {
     var dels:Array<FLMListener.DelAlloc> = frame_data.alloc_del;
 
     // Bottom-up objects by type
-    var bottom_up = new StringMap<AllocData>();
+    var bottom_up = new IntMap<AllocData>();
     frame_data.alloc_bottom_up = bottom_up;
     if (news!=null) {
       for (i in 0...news.length) {
@@ -413,7 +413,7 @@ class FLMSession {
         var id = item.stackid-1;
         var callstack:Array<Int> = this.stack_maps[id];
         if (callstack==null) {
-          if (item.type!="[object Event]") trace("- warning: null callstack for "+item.type+" on frame id="+frame_data.id);
+          if (this.stack_strings[item.type]!="[object Event]") trace("- warning: null callstack for "+item.type+" on frame id="+frame_data.id);
           continue;
         }
         //trace(" - type "+item.type+", callstack="+callstack);
@@ -1367,14 +1367,14 @@ class SelectionController {
     // - - - - - - - - - - - - - - -
     if (false && alloc_pane.visible) {
 
-      var deallocs:StringMap<CollatedDealloc> = new StringMap<CollatedDealloc>();
+      var deallocs:IntMap<CollatedDealloc> = new IntMap<CollatedDealloc>();
       var total:Int = 0;
       var total_size:Int = 0;
       each_frame(function(f:FLMListener.Frame) {
         for (i in 0...f.alloc_del.length) {
           var d = f.alloc_del[i];
           var item:FLMListener.NewAlloc = session.alloc_guid_to_newalloc.get(d.guid);
-          var type = item.type+"";
+          var type:Int = item.type;
           if (!deallocs.exists(type)) {
             deallocs.set(type, {total:0,size:0});
           }
@@ -1388,8 +1388,9 @@ class SelectionController {
 
       if (total>0) {
         y = 0;
-        for (type in deallocs.keys()) {
-          var cd = deallocs.get(type);
+        for (type_int in deallocs.keys()) {
+          var cd = deallocs.get(type_int);
+          var type:String = session.stack_strings[type_int];
 
           // type name formatting
           if (type.substr(0,7)=='[object') type = type.substr(8, type.length-9);
@@ -1431,11 +1432,11 @@ class SelectionController {
     // - - - - - - - - - - - - - - -
     if (true && alloc_pane.visible) {
 
-      var allocs:StringMap<AllocData> = new StringMap<AllocData>();
+      var allocs:IntMap<AllocData> = new IntMap<AllocData>();
       var total_num = 0;
       var total_size = 0;
       each_frame(function(f) { // also updateObjects?
-        var frame_allocs:StringMap<AllocData> = f.alloc_bottom_up;
+        var frame_allocs:IntMap<AllocData> = f.alloc_bottom_up;
         if (frame_allocs!=null) {
           for (type in frame_allocs.keys()) {
             if (!allocs.exists(type)) allocs.set(type, new AllocData());
@@ -1462,17 +1463,18 @@ class SelectionController {
       var ping = true;
 
       var keys = allocs.keys();
-      var sorted:Array<String> = new Array<String>();
+      var sorted:Array<Int> = new Array<Int>();
       for (key in keys) sorted.push(key);
-      sorted.sort(function(i0:String, i1:String):Int {
+      sorted.sort(function(i0:Int, i1:Int):Int {
         var ad0 = allocs.get(i0);
         var ad1 = allocs.get(i1);
         if (_alloc_sort_count) return ad0.total_num > ad1.total_num ? -1 : (ad0.total_num < ad1.total_num ? 1 : 0);
         return ad0.total_size > ad1.total_size ? -1 : (ad0.total_size < ad1.total_size ? 1 : 0);
       });
 
-      for (type in sorted) {
-        var ad = allocs.get(type);
+      for (type_int in sorted) {
+        var ad = allocs.get(type_int);
+        var type = session.stack_strings[type_int];
 
         // type name formatting
         if (type.substr(0,7)=='[object') type = type.substr(8, type.length-9);

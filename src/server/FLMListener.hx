@@ -16,7 +16,7 @@ typedef Timing = {
 
 typedef NewAlloc = { // aka struct
   var size:Int;
-  var type:String;
+  var type:Int;
   var stackid:Int;
   var id:Int;
   var guid:Int;
@@ -117,13 +117,14 @@ class FLMListener {
 						//trace(cur_frame.push_stack_maps);
 					}
 					case "newObject": {
-						// HXTelemetry collapses value into root object
-						var n:NewAlloc = data["value"]!=null ? data["value"] : cast(data);
+						var n:NewAlloc = data["value"];
+            trace("TODO, FLM, map data.type to Int, store, err, somewhere");
+            // HXT type strings are stored in the stack_strings lookup, FLM,
+            // we'll have to store them elsewhere.
 						cur_frame.alloc_new.push(n);
 					}
 					case "deleteObject": {
-						// HXTelemetry collapses value into root object
-						var d:DelAlloc = data["value"]!=null ? data["value"] : cast(data);
+						var d:DelAlloc = data["value"];
 						cur_frame.alloc_del.push(d);
 					}
 				}
@@ -348,7 +349,7 @@ class FLMListener {
               while (num>0) {
                 var n:NewAlloc = {
                   id:flm_socket.input.readInt32(),
-                  type:session_names[flm_socket.input.readInt32()-1],
+                  type:flm_socket.input.readInt32(),
                   stackid:flm_socket.input.readInt32(),
                   size:flm_socket.input.readInt32(),
                   guid:0

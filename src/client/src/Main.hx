@@ -1886,3 +1886,14 @@ class Pane extends Sprite {
 
   }
 }
+
+// class SortableTabularBaseClass {
+//   // Base implementations:
+//   // - Pane
+//   // - tab sprite
+//   // - label sprites (and click handlers)
+//  
+//   // abstract:
+//   //  column labels (click sortable)
+//   //  data source
+// }

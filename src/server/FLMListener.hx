@@ -103,7 +103,7 @@ class FLMListener {
 					case "stackIdMap": {
 						var maps:Array<Int> = data["value"]; // len, val, val, val, len, val, ...
 						if (cur_frame.push_stack_maps==null) cur_frame.push_stack_maps = new Array<Array<Int>>();
-						//trace("Push maps: "+maps);
+						//trace("Got new maps: "+maps);
 						var len = maps[0];
 						cur_frame.push_stack_maps.push(new Array<Int>());
 						for (i in 1...maps.length) {
@@ -119,6 +119,7 @@ class FLMListener {
 					case "newObject": {
 						var n:NewAlloc = data["value"];
             trace("TODO, FLM, map data.type to Int, store, err, somewhere");
+            trace("TODO, FLM, stackid -= 1 (hxt is 0-indexed, flm is 1-indexed)");
             // HXT type strings are stored in the stack_strings lookup, FLM,
             // we'll have to store them elsewhere.
 						cur_frame.alloc_new.push(n);
@@ -342,7 +343,7 @@ class FLMListener {
               data = new Object<Dynamic>();
               data.set("name", ".memory.stackIdMap");
               data.set("value", arr);
-              handle_data(data);
+              // handle_data is called below
             }
             case 13: { // allocations
               var num:Int = flm_socket.input.readInt32();

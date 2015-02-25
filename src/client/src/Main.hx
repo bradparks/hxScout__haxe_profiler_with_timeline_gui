@@ -410,13 +410,15 @@ class FLMSession {
           alloc_guid_to_newalloc.set(item.guid, item);
         }
 
-        var id = item.stackid-1;
+        var id = item.stackid;
         var callstack:Array<Int> = this.stack_maps[id];
         if (callstack==null) {
-          if (this.stack_strings[item.type]!="[object Event]") trace("- warning: null callstack for "+item.type+" on frame id="+frame_data.id);
+          if (this.stack_strings[item.type]!="[object Event]") trace("- warning: null callstack for "+this.stack_strings[item.type]+" on frame id="+frame_data.id+", stack map id "+id+" > length "+this.stack_maps.length);
           continue;
         }
         //trace(" - type "+item.type+", callstack="+callstack);
+
+        //trace("New "+item.type+"=="+stack_strings[item.type]+" from stackid="+id+", ["+callstack+"], "+stack_strings[callstack[0]]);
 
         var ptr:AllocData = ad;
         for (j in 0...callstack.length) {

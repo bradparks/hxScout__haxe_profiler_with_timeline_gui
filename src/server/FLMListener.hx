@@ -83,6 +83,10 @@ class FLMListener {
     var reader = new Amf3Reader(flm_socket.input);
     var connected = true;
 
+    PubSub.subscribe("stop_session", function(data:Dynamic):Void {
+      if (data.inst_id == inst_id) connected = false;
+    });
+
     function send_message(data:Dynamic)
     {
       client_writer.sendMessage(data);
@@ -391,6 +395,9 @@ class FLMListener {
     flm_socket = null;
     client_writer = null;
     reader = null;
+
+    PubSub.publish("flm_listener_closed", { inst_id: inst_id});
+
     trace("FLMListener["+inst_id+"] thread complete");
   }
 }

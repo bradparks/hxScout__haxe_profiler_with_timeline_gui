@@ -201,7 +201,7 @@ class Main extends Sprite {
 
 #end
 
-  function send_frame_data(frame_data):Void
+  function send_frame_data(frame_data:Dynamic):Void
   {
     //trace(frame_data);
     var inst_id:String = frame_data.inst_id;
@@ -568,6 +568,32 @@ class HXScoutClientGUI extends Sprite
     lbl.x = 4;
     lbl.mouseEnabled = false;
     ses.addChild(lbl);
+
+    var stop = new Sprite();
+    Util.begin_gradient(stop.graphics, 16, 16, 0xee0000, 0xff3333);
+    stop.graphics.lineStyle(1, 0xcc0000);
+    stop.graphics.drawRoundRect(0,0,16,16, 3);
+    stop.x = ses.width-stop.width-6;
+    stop.y = ses.height/2-stop.height/2;
+    stop.name = "stop";
+    ses.addChild(stop);
+
+    function stop_clicked(e) {
+      PubSub.publish("stop_session", { inst_id:inst_id });
+    }
+    function disable_stop() {
+      stop.mouseEnabled = false;
+      stop.graphics.clear();
+      Util.begin_gradient(stop.graphics, 16, 16, 0x777777, 0xaaaaaa);
+      stop.graphics.lineStyle(1, 0x555555);
+      stop.graphics.drawRoundRect(0,0,16,16, 3);
+      AEL.remove(stop, MouseEvent.CLICK, stop_clicked);
+    }
+    AEL.add(stop, MouseEvent.CLICK, stop_clicked);
+    PubSub.subscribe("flm_listener_closed", function(data:Dynamic):Void {
+      if (data.inst_id == inst_id) disable_stop();
+    });
+
   }
 
   public function add_session(flm_session:FLMSession)
@@ -579,7 +605,7 @@ class HXScoutClientGUI extends Sprite
       set_active_session(sessions.length-1);
     }
 
-    Util.gray_gradient(s.graphics, session_pane.innerWidth, 42);
+    Util.begin_gradient(s.graphics, session_pane.innerWidth, 42);
     s.graphics.lineStyle(2, 0x555555);
     s.graphics.drawRect(0,0,session_pane.innerWidth,42);
     s.buttonMode = true;
@@ -1592,7 +1618,7 @@ class DetailUI {
     profiler.filters = [Util.TEXT_SHADOW];
     profiler.mouseEnabled = false;
     var p = pcont = new Sprite();
-    Util.gray_gradient(p.graphics, profiler.width*1.4, profiler.height);
+    Util.begin_gradient(p.graphics, profiler.width*1.4, profiler.height);
     p.graphics.lineStyle(1, 0x555555);
     p.graphics.drawRect(0,0,profiler.width*1.4, profiler.height);
     profiler.x = profiler.width*0.2;
@@ -1603,7 +1629,7 @@ class DetailUI {
     alloc.filters = [Util.TEXT_SHADOW];
     alloc.mouseEnabled = false;
     var a = acont = new Sprite();
-    Util.gray_gradient(a.graphics, alloc.width*1.4, alloc.height);
+    Util.begin_gradient(a.graphics, alloc.width*1.4, alloc.height);
     a.graphics.lineStyle(1, 0x555555);
     a.graphics.drawRect(0,0,alloc.width*1.4, alloc.height);
     alloc.x = alloc.width*0.2;
@@ -1849,7 +1875,7 @@ class Pane extends Sprite {
     backdrop.graphics.clear();
     backdrop.graphics.lineStyle(outline, 0x111111, outline_alpha);
 
-    Util.gray_gradient(backdrop.graphics, _width, _height);
+    Util.begin_gradient(backdrop.graphics, _width, _height);
     backdrop.graphics.drawRoundRect(0,0,_width,_height, 7);
 
     // cont knockout

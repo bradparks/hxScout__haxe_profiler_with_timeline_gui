@@ -98,12 +98,12 @@ class Util {
   }
   public static var TEXT_SHADOW:flash.filters.DropShadowFilter = new flash.filters.DropShadowFilter(1, 120, 0x0, 0.8, 3, 3, 1, 2);
   private static var GRADIENT_M:flash.geom.Matrix = new flash.geom.Matrix();
-  public static function gray_gradient(g:openfl.display.Graphics,
-                                       w:Float,
-                                       h:Float,
-                                       c1:UInt=0x444444,
-                                       c2:UInt=0x535353,
-                                       angle:Float=-1.5757963):Void
+  public static function begin_gradient(g:openfl.display.Graphics,
+                                        w:Float,
+                                        h:Float,
+                                        c1:UInt=0x444444,
+                                        c2:UInt=0x535353,
+                                        angle:Float=-1.5757963):Void
   {
     GRADIENT_M.identity();
     GRADIENT_M.createGradientBox(w, h, angle);

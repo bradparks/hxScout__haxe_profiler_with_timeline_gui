@@ -7,6 +7,9 @@ import openfl.net.Socket;
 import haxe.ds.StringMap;
 import haxe.ds.IntMap;
 
+import UI.Pane;
+import UI.TabbedPane;
+
 class Main extends Sprite {
 
   private var fps:openfl.display.FPS;
@@ -212,6 +215,7 @@ class Main extends Sprite {
     flm_sessions.get(inst_id).receive_frame_data(frame_data);
     if (frame_data.session_name!=null) {
       gui.update_name(frame_data.session_name, frame_data.inst_id);
+      flm_sessions.get(inst_id).amf_mode = frame_data.amf_mode;
     }
   }
 }
@@ -289,6 +293,7 @@ class FLMSession {
 
   public var frames:Array<FLMListener.Frame> = [];
   public var inst_id:String;
+  public var amf_mode:Bool = true;
   public var temp_running_mem:StringMap<Int>;
   public var name:String;
   public var stack_strings:Array<String> = ["1-indexed"];
@@ -461,7 +466,7 @@ class HXScoutClientGUI extends Sprite
   private var timing_pane:Pane;
   private var memory_pane:Pane;
   private var session_pane:Pane;
-  private var detail_pane:Pane;
+  private var detail_pane:TabbedPane;
   private var sample_pane:Pane;
   private var alloc_pane:Pane;
 
@@ -482,24 +487,29 @@ class HXScoutClientGUI extends Sprite
     timing_pane = new Pane(true);
     memory_pane = new Pane(true);
     session_pane = new Pane(false, false, true); // scrolly
-    detail_pane = new Pane();
+    detail_pane = new TabbedPane();
 
     sample_pane = new Pane(false, false, true);  // scrolly
     sample_pane.outline = 2;
     sample_pane.outline_alpha = 0.75;
+    sample_pane.name = "Profiler";
 
     alloc_pane = new Pane(false, false, true);  // scrolly
     alloc_pane.outline = 2;
     alloc_pane.outline_alpha = 0.75;
+    alloc_pane.name = "Allocations";
 
     addChild(session_pane);
     addChild(nav_pane);
     addChild(summary_pane);
     addChild(timing_pane);
     addChild(memory_pane);
+
     addChild(detail_pane);
-    detail_pane.cont.addChild(alloc_pane);
-    detail_pane.cont.addChild(sample_pane);
+
+    detail_pane.add_pane(sample_pane);
+    detail_pane.add_pane(alloc_pane);
+    detail_pane.select_tab(0);
 
     sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, summary_pane, layout, get_active_session);
     nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane, sel_ctrl, layout, get_active_session, function() { return layout.frame_width/nav_scalex; }, function() { var tmp = active_session; set_active_session(-1); set_active_session(tmp); });
@@ -540,8 +550,10 @@ class HXScoutClientGUI extends Sprite
     resize_pane(w, h, memory_pane,  layout.session.width, y, w-(layout.session.width+layout.summary.width), layout.timing.height);
     y += layout.timing.height;
     resize_pane(w, h, detail_pane,  layout.session.width, y, w-(layout.session.width), h-y);
-    resize_pane(0, 0, sample_pane,  0, 20, detail_pane.innerWidth, detail_pane.innerHeight-20);
-    resize_pane(0, 0, alloc_pane,  0, 20, detail_pane.innerWidth, detail_pane.innerHeight-20);
+
+    // This now occurs via TabbedPane
+    //resize_pane(0, 0, sample_pane,  0, 20, detail_pane.innerWidth, detail_pane.innerHeight-20);
+    //resize_pane(0, 0, alloc_pane,  0, 20, detail_pane.innerWidth, detail_pane.innerHeight-20);
 
     if (stage!=null) {
       sel_ctrl.redraw();
@@ -624,7 +636,7 @@ class HXScoutClientGUI extends Sprite
       session.ui_state = { nav_x:timing_pane.cont.scrollRect.x,
                            timing_scaley:nav_ctrl.timing_scaley,
                            memory_scaley:nav_ctrl.memory_scaley,
-                           tab_idx:detail_ui.sel_index,
+                           tab_idx:detail_pane.selected_tab,
                            sel_start:sel_ctrl.start_sel,
                            sel_end:sel_ctrl.end_sel };
     }
@@ -658,7 +670,7 @@ class HXScoutClientGUI extends Sprite
     { nav_x:timing_pane.cont.scrollRect.x,
         timing_scaley:nav_ctrl.timing_scaley,
         memory_scaley:nav_ctrl.memory_scaley,
-        tab_idx:detail_ui.sel_index,
+        tab_idx:detail_pane.selected_tab,
         sel_start:sel_ctrl.start_sel,
         sel_end:sel_ctrl.end_sel }
 
@@ -678,7 +690,7 @@ class HXScoutClientGUI extends Sprite
     memory_pane.cont.scrollRect = r;
     nav_ctrl.timing_scaley = session.ui_state.timing_scaley;
     nav_ctrl.memory_scaley = session.ui_state.memory_scaley;
-    detail_ui.sel_index = session.ui_state.tab_idx;
+    detail_pane.selected_tab = session.ui_state.tab_idx;
     sel_ctrl.start_sel = session.ui_state.sel_start;
     sel_ctrl.end_sel = session.ui_state.sel_end;
     sel_ctrl.redraw();
@@ -1068,12 +1080,12 @@ class SelectionController {
 
   public static var mem_keys = ["total","used","managed.used","bitmap","bytearray","script","network","telemetry.overhead","managed","bitmap.display","bitmap.data"];
   private static var mem_info = {
-    "managed.used":{ name:"ActionScript Objects", color:0x227788 },
-    "bitmap":{ name:"Bitmap", color:0x22aa99 },
-    "telemetry.overhead":{ name:"Other", color:0x667755 },
+    "managed.used":{ name:"ActionScript Objects", hxt_name:"Haxe Objects", color:0x227788 },
+    "bitmap":{ name:"Bitmap", hxt_name:"Bitmap", color:0x22aa99 },
+    "telemetry.overhead":{ name:"Other", hxt_name:"Other", color:0x667755 },
     "network":{ redirect:"telemetry.overhead" }, // Also 'other', Network Buffers
-    "script":{ name:"SWF Files", color:0x119944 },
-    "bytearray":{ name:"ByteArrays", color:0x11bb66 }
+    "script":{ name:"SWF Files", hxt_name:"Unexpected (SWF Files)", color:0x119944 },
+    "bytearray":{ name:"ByteArrays", hxt_name:"Unexpected (ByteArrays)", color:0x11bb66 }
   }
 
   private static var timing_keys = ["as", "rend", "net", "gc", "other"];
@@ -1248,7 +1260,7 @@ class SelectionController {
     var y:Float = tlbl.y + tlbl.height;
     for (key in timing_keys) {
       var val = Reflect.field(timing_info, key);
-      var albl = Util.make_label(val.name, 12, val.color);
+      var albl = Util.make_label(session.amf_mode ? val.name : val.hxt_name, 12, val.color);
       albl.y = y;
       albl.x = 20;
       summary_pane.cont.addChild(albl);
@@ -1291,7 +1303,7 @@ class SelectionController {
       var val = Reflect.field(mem_info, key);
       if (val==null) continue; // total and used are not in info
       if (Reflect.hasField(val, "redirect")) continue;
-      var albl = Util.make_label(val.name, 12, val.color);
+      var albl = Util.make_label(session.amf_mode ? val.name : val.hxt_name, 12, val.color);
       albl.y = y;
       albl.x = 20;
       summary_pane.cont.addChild(albl);
@@ -1623,7 +1635,7 @@ class DetailUI {
     p.graphics.drawRect(0,0,profiler.width*1.4, profiler.height);
     profiler.x = profiler.width*0.2;
     p.addChild(profiler);
-    detail_pane.cont.addChild(p);
+    //detail_pane.cont.addChild(p);
 
     var alloc = Util.make_label("Memory", 12);
     alloc.filters = [Util.TEXT_SHADOW];
@@ -1635,7 +1647,7 @@ class DetailUI {
     alloc.x = alloc.width*0.2;
     a.addChild(alloc);
     a.x = p.x+p.width+5;
-    detail_pane.cont.addChild(a);
+    //detail_pane.cont.addChild(a);
 
     plbl = new Sprite();
     var plbl_self = Util.make_label("Self Time (ms)", 12);
@@ -1673,9 +1685,9 @@ class DetailUI {
     }
   }
 
-  public var sel_index(get, set):Int;
-  public function get_sel_index():Int { return sample_pane.visible ? 0 : 1; }
-  public function set_sel_index(val:Int):Int { select(val==0 ? pcont : acont); return val; }
+  // public var sel_index(get, set):Int;
+  // public function get_sel_index():Int { return sample_pane.visible ? 0 : 1; }
+  // public function set_sel_index(val:Int):Int { select(val==0 ? pcont : acont); return val; }
 
   private function select(tgt:Sprite):Void
   {
@@ -1703,197 +1715,3 @@ class DetailUI {
   }
 
 }
-
-class Pane extends Sprite {
-
-  public var PAD:Float = 6;
-  public var outline:Float = 3;
-  public var outline_alpha:Float = 1;
-
-  public var cont(get, null):Sprite;
-  var backdrop:Shape;
-  public var scrollbars:Shape;
-
-  var _width:Float;
-  var _height:Float;
-  var _bottom_aligned:Bool;
-  var _scrollbarx:Bool;
-  var _scrollbary:Bool;
-  var _scroll_invalid:Bool;
-
-  public function new (bottom_aligned:Bool=false, scrollbarx:Bool=false, scrollbary:Bool=false, w:Float=0, h:Float=0)
-  {
-    super();
-    _bottom_aligned = bottom_aligned;
-    _width = w;
-    _height = h;
-    _scrollbarx = scrollbarx;
-    _scrollbary = scrollbary;
-
-    if (bottom_aligned && scrollbary) throw "This combination of options is not yet supported";
-
-    backdrop = new Shape();
-    addChild(backdrop);
-
-    cont = new Sprite();
-    addChild(cont);
-    cont.scrollRect = new flash.geom.Rectangle(0,_bottom_aligned?-h:h,w,h);
-    cont.x = cont.y = PAD;
-
-    scrollbars = new Shape();
-    addChild(scrollbars);
-
-    AEL.add(this, MouseEvent.MOUSE_WHEEL, handle_scroll_wheel);
-    Util.stage.addEventListener(Event.ENTER_FRAME, handle_enter_frame);
-
-    resize();
-  }
-
-  override public function set_width(w:Float):Float { _width = w; resize(); return w; }
-  override public function get_width():Float { return _width; }
-  override public function set_height(h:Float):Float { _height = h; resize(); return h; }
-  override public function get_height():Float { return _height; }
-
-  public var innerWidth(get, null):Float;
-  public var innerHeight(get, null):Float;
-  public function get_innerWidth():Float { return _width-2*PAD; }
-  public function get_innerHeight():Float { return _height-2*PAD; }
-
-  public function get_cont():Sprite {
-    _scroll_invalid = true;
-    return cont;
-  }
-
-  public function invalidate_scrollbars():Void {
-    _scroll_invalid = true;
-  }
-
-  private function handle_scroll_wheel(e:Event):Void
-  {
-    //trace("wheel event, delta="+cast(e).delta+", sby="+_scrollbary+", scrollrect.y="+cont.scrollRect.y);
-    var r = cont.scrollRect;
-    // TODO: bottom_aligned support?, +=h laster, -=h
-    if (_scrollbary) {
-      r.y += (cast(e).delta<0) ? 25 : -25;
-      limit_scrolly(r);
-    } else if (_scrollbarx) {
-      r.x += (cast(e).delta<0) ? 25 : -25;
-      limit_scrollx(r);
-    }
-    cont.scrollRect = r;
-    _scroll_invalid = true;
-  }
-
-  private function max_scroll_y():Float {
-    var rect = cont.scrollRect;
-    var bounds = cont.getBounds(cont);
-    return Math.max(0, bounds.height-rect.height);
-  }
-
-  private function max_scroll_x():Float {
-    var rect = cont.scrollRect;
-    var bounds = cont.getBounds(cont);
-    return Math.max(0, bounds.width-rect.width);
-  }
-
-  private function handle_enter_frame(e:Event):Void
-  {
-    if (!_scroll_invalid) return;
-
-    var rect = cont.scrollRect;
-    var bounds = cont.getBounds(cont);
-
-    if (_scrollbary || _scrollbarx) scrollbars.graphics.clear();
-    if (_scrollbary && rect.height<bounds.height) {
-      scrollbars.graphics.lineStyle(1, 0x0,0.2);
-      scrollbars.graphics.beginFill(0xffffff,0.2);
-      scrollbars.graphics.drawRoundRect(rect.width+1,
-                                        PAD,
-                                        PAD,
-                                        rect.height,
-                                        PAD);
-      var pct = rect.height/bounds.height;
-      var scrollbar_h = (rect.height/10)*(1-pct) + (rect.height)*pct;
-      var scroll_pct = rect.y/(bounds.height-rect.height);
-      var scroll_y = (rect.height-scrollbar_h)*scroll_pct;
-      scrollbars.graphics.lineStyle(1, 0xffffff,0.2);
-      scrollbars.graphics.beginFill(0xcccccc,0.4);
-      scrollbars.graphics.drawRoundRect(rect.width+2,
-                                        PAD+scroll_y,
-                                        PAD-2,
-                                        scrollbar_h,
-                                        PAD);
-    }
-    if (_scrollbarx && rect.width<bounds.width) {
-      scrollbars.graphics.lineStyle(1, 0x0,0.2);
-      scrollbars.graphics.beginFill(0xffffff,0.2);
-      scrollbars.graphics.drawRoundRect(PAD,
-                                        rect.height+2,
-                                        rect.width,
-                                        PAD-2,
-                                        PAD);
-      var pct = rect.width/bounds.width;
-      var scrollbar_w = (rect.width/10)*(1-pct) + (rect.width)*pct;
-      var scroll_pct = rect.x/(bounds.width-rect.width);
-      var scroll_x = (rect.width-scrollbar_w)*scroll_pct;
-      scrollbars.graphics.lineStyle(1, 0xffffff,0.2);
-      scrollbars.graphics.beginFill(0xcccccc,0.4);
-      scrollbars.graphics.drawRoundRect(PAD+scroll_x,
-                                        rect.height+1,
-                                        scrollbar_w,
-                                        PAD,
-                                        PAD);
-    }
-
-    _scroll_invalid = false;
-  }
-
-  private inline function limit_scrollx(r:flash.geom.Rectangle):Void
-  {
-    if (r.x<0) r.x=0;
-    if (r.x>max_scroll_x()) r.x=max_scroll_x();
-  }
-
-  private inline function limit_scrolly(r:flash.geom.Rectangle):Void
-  {
-    if (r.y<0) r.y=0;
-    if (r.y>max_scroll_y()) r.y=max_scroll_y();
-  }
-
-  private function resize()
-  {
-    var r = new flash.geom.Rectangle(cont.scrollRect.x,
-                                     _bottom_aligned ? -(_height-2*PAD) : cont.scrollRect.y,
-                                     _width-2*PAD,
-                                     _height-2*PAD);
-
-    // Ensure scroll stays in bounds during resize
-    if (_scrollbarx) limit_scrollx(r);
-    if (_scrollbary) limit_scrolly(r);
-    cont.scrollRect = r;
-
-    backdrop.graphics.clear();
-    backdrop.graphics.lineStyle(outline, 0x111111, outline_alpha);
-
-    Util.begin_gradient(backdrop.graphics, _width, _height);
-    backdrop.graphics.drawRoundRect(0,0,_width,_height, 7);
-
-    // cont knockout
-    var p:Float = outline;
-    backdrop.graphics.lineStyle(0,0, 0);
-    backdrop.graphics.beginFill(0x000000, 0.25);
-    backdrop.graphics.drawRoundRect(p,p,_width-p*2,_height-p*2,5);
-
-  }
-}
-
-// class SortableTabularBaseClass {
-//   // Base implementations:
-//   // - Pane
-//   // - tab sprite
-//   // - label sprites (and click handlers)
-//  
-//   // abstract:
-//   //  column labels (click sortable)
-//   //  data source
-// }

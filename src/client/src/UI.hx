@@ -2,6 +2,8 @@ package;
 
 import flash.display.*;
 import flash.events.*;
+import flash.text.*;
+import motion.Actuate;
 
 // make cont private
 //  - add child
@@ -294,9 +296,58 @@ class TabbedPane extends Pane
 
 class AbsTabularDataSource
 {
-  function get_labels():Array<String>
+  public function new() { }
+
+  public function get_labels():Array<String>
   {
-    throw "AbsTabularDataSource.get_labels() is abstract";
+    throw "AbsTabularDataSources is abstract";
+  }
+
+  public function get_num_rows():Int
+  {
+    throw "AbsTabularDataSources is abstract";
+  }
+
+  public function get_num_cols():Int
+  {
+    throw "AbsTabularDataSources is abstract";
+  }
+
+  public function get_indent(row_idx:Int):Int
+  {
+    throw "AbsTabularDataSources is abstract";
+  }
+
+  public function get_value(row_idx, col_idx):String
+  {
+    throw "AbsTabularDataSources is abstract";
+  }
+}
+
+class SamplesTabularDataSource extends AbsTabularDataSource
+{
+  public function new() {
+    super();
+  }
+
+  private static var labels:Array<String> = ["Stack", "Self Time (ms)", "Total Time (ms)"];
+  override public function get_labels():Array<String> { return labels; }
+
+  override public function get_num_rows():Int
+  {
+    return 200;
+  }
+
+  override public function get_num_cols():Int { return 3; }
+
+  override public function get_indent(row_idx:Int):Int
+  {
+    return 0;
+  }
+
+  override public function get_value(row_idx, col_idx):String
+  {
+    return "Test";
   }
 }
 
@@ -312,23 +363,23 @@ class AbsTabularDataSource
 // get label strings (abstract)
 // resort trigger
 
-class AbsTabularDataPane extends Pane
+class TabularDataPane extends Pane
 {
   private static var LABEL_HEIGHT:Float = 20;
 
-  private var label_cont:Sprite;
-  private var row_cont:Pane;
+  private var _label_cont:Sprite;
+  private var _row_cont:Pane;
   private var _data_source:AbsTabularDataSource;
 
-  public function new(data_source:AbsTabularDataSource):Void
+  public function new(data_source:AbsTabularDataSource, bottom_aligned:Bool=false, scrollbarx:Bool=false, scrollbary:Bool=false, w:Float=0, h:Float=0):Void
   {
-    label_cont = new Sprite();
-    row_cont = new Pane(false, false, true); // scrolly
+    _label_cont = new Sprite();
+    _row_cont = new Pane(false, false, true); // scrolly
 
-    super();
+    super(bottom_aligned, scrollbarx, scrollbary, w, h);
 
-    cont.addChild(label_cont);
-    cont.addChild(row_cont);
+    cont.addChild(_label_cont);
+    cont.addChild(_row_cont);
 
     _data_source = data_source;
     redraw();
@@ -337,16 +388,16 @@ class AbsTabularDataPane extends Pane
   override private function resize():Void
   {
     super.resize();
-    row_cont.width = _width;
-    row_cont.height = _height - LABEL_HEIGHT;
-    row_cont.y = LABEL_HEIGHT;
+    _row_cont.width = _width;
+    _row_cont.height = _height - LABEL_HEIGHT;
+    _row_cont.y = LABEL_HEIGHT;
   }
 
   function redraw()
   {
     // cleanup
-    while (label_cont.numChildren>0) label_cont.removeChildAt(0); // TODO: pool
-    while (row_cont.numChildren>0) row_cont.removeChildAt(0); // TODO: pool
+    while (_label_cont.numChildren>0) _label_cont.removeChildAt(0); // TODO: pool
+    while (_row_cont.numChildren>0) _row_cont.removeChildAt(0); // TODO: pool
 
     // draw labels
     draw_labels();
@@ -355,38 +406,108 @@ class AbsTabularDataPane extends Pane
 
   function draw_labels()
   {
-    for (lbl in _data_source.labels) {
+    var lbl:String;
+    var i:Int = 0;
+    for (lbl in _data_source.get_labels()) {
       var label = Util.make_label(lbl, 12);
-      label_cont.addChild(label);
+      _label_cont.addChild(label);
+      label.x = i*50;
       // label.x = ?? // TODO: specify column widths? percentages? auto?
+      i++;
     }
   }
 
   function draw_rows()
   {
     // read from data source, draw rows, collapsable, setup linked list
-    for (row_idx=0..._data_source.num_rows) {
+    for (row_idx in 0..._data_source.get_num_rows()) {
       var row_sprite:Sprite = new Sprite(); // TODO: pool
-      for (col_idx=0..._data_source.num_cols) {
-        var value = Util.make_label(_data_source.get_string(row_idx, col_idx), 12);
+      var indent = _data_source.get_indent(row_idx);
+      row_sprite.y = 20*row_idx;
+      _row_cont.addChild(row_sprite);
+      for (col_idx in 0..._data_source.get_num_cols()) {
+        var value = Util.make_label(_data_source.get_value(row_idx, col_idx), 12);
         row_sprite.addChild(value);
-        var indent = _data_source.get_indent(row_idx);
+        value.x = 50*col_idx;
         // TODO: value.x = ?? // TODO: specify column widths? percentages? auto?
         // TODO: indent, alignment, etc
         // TODO: draw collapsing buttons
       }
+      //add_collapse_button(row_sprite); // TODO: move to private static of this class
     }
+  }
 
-build _indent_linked_list
+  private static function add_collapse_button(row_sprite:Sprite,
+                                              lbl:TextField,
+                                              is_hidden:Bool,
+                                              do_refresh_scrollbars:Void->Void):Void
+  {
+    var r:flash.geom.Rectangle = lbl.getBounds(row_sprite); // TODO: wasteful, const height
+    var btn:Sprite = new Sprite();
+    //btn.graphics.lineStyle(1, 0xeeeeee, 0.2);
+    btn.graphics.beginFill(0xeeeeee, 0.01);
+    btn.graphics.drawCircle(0, 0, r.height/3);
+    btn.x = r.x-(r.height/3);
+    btn.y = r.y+r.height/2;
+    btn.graphics.lineStyle(1,0xeeeeee,0.7);
+    btn.graphics.beginFill(0xeeeeee, 0.5);
+    btn.graphics.moveTo(-r.height/5, -r.height/5);
+    btn.graphics.lineTo( r.height/5, -r.height/5);
+    btn.graphics.lineTo(          0,  r.height/6);
+    btn.rotation = is_hidden ? -90 : 0;
+    row_sprite.addChild(btn);
+    btn.name = "collapse_btn";
 
-    var sort_order:Array<Int> = _data_source.get_sort_order();
-    if (sort_order==null) {
-      for (i=0..._data_source.num_rows) {
-        
+    function do_hide():Void
+    {
+      var idx = row_sprite.parent.getChildIndex(row_sprite);
+      var hiding = true;
+      var dy = 0.0;
+      for (i in (idx+1)...row_sprite.parent.numChildren) {
+        var later = row_sprite.parent.getChildAt(i);
+        if (later.x <= row_sprite.x) hiding = false;
+        if (hiding && later.visible) {
+          later.visible = false;
+          dy += later.height;
+        }
+        later.y -= dy;
       }
-    } else {
-      throw "TODO: support sort"
     }
+
+    function do_show(recursive:Bool=true):Void
+    {
+      var idx = row_sprite.parent.getChildIndex(row_sprite);
+      var showing = true;
+      var dy = 0.0;
+      var at_x = recursive ? -1 : row_sprite.parent.getChildAt(idx+1).x;
+      for (i in (idx+1)...row_sprite.parent.numChildren) {
+        var later:Sprite = cast(row_sprite.parent.getChildAt(i));
+        if (later.x <= row_sprite.x) showing = false;
+        if (showing && !later.visible && (recursive || Math.abs(at_x-later.x)<0.01)) {
+          later.visible = true;
+          dy += later.height;
+          // Update newly visible button
+          var later_btn = later.getChildByName("collapse_btn");
+          if (later_btn!=null) {
+            later_btn.rotation = (recursive || row_sprite.parent.getChildAt(i+1).visible) ? 0 : -90;
+          }
+        }
+        later.y += dy;
+      }
+    }
+
+    function toggle_collapse(e:Event=null):Void
+    {
+      is_hidden = !is_hidden;
+      Actuate.tween(btn, 0.2, { rotation: is_hidden ? -90 : 0 });
+      if (is_hidden) do_hide();
+      else do_show(cast(e).shiftKey);
+
+      // Invalidate scrollbars
+      do_refresh_scrollbars();
+    }
+
+    AEL.add(btn, MouseEvent.CLICK, toggle_collapse);
   }
 
 }

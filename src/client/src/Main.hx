@@ -9,6 +9,8 @@ import haxe.ds.IntMap;
 
 import UI.Pane;
 import UI.TabbedPane;
+import UI.SamplesTabularDataSource;
+import UI.TabularDataPane;
 
 class Main extends Sprite {
 
@@ -499,6 +501,12 @@ class HXScoutClientGUI extends Sprite
     alloc_pane.outline_alpha = 0.75;
     alloc_pane.name = "Allocations";
 
+    var ds = new SamplesTabularDataSource();
+    var foo_pane = new TabularDataPane(ds, false, false, true);  // scrolly
+    foo_pane.outline = 2;
+    foo_pane.outline_alpha = 0.75;
+    foo_pane.name = "Foo";
+
     addChild(session_pane);
     addChild(nav_pane);
     addChild(summary_pane);
@@ -509,6 +517,7 @@ class HXScoutClientGUI extends Sprite
 
     detail_pane.add_pane(sample_pane);
     detail_pane.add_pane(alloc_pane);
+    detail_pane.add_pane(foo_pane);
     detail_pane.select_tab(0);
 
     sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, summary_pane, layout, get_active_session);

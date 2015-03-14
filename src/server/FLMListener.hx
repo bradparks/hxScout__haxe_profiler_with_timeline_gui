@@ -153,7 +153,7 @@ class FLMListener {
 				//}
 	 
 				if (name=='.swf.name') {
-					send_message({session_name:data['value'], inst_id:inst_id});
+					send_message({session_name:data['value'], inst_id:inst_id, amf_mode:amf_mode});
 				}
 	 
 				// - - - - - - - - - - - -

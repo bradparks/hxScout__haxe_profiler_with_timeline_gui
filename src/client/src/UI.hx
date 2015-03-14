@@ -24,6 +24,7 @@ class Pane extends Sprite {
   var _scrollbarx:Bool;
   var _scrollbary:Bool;
   var _scroll_invalid:Bool;
+  var _needs_resize:Bool = true;
 
   public function new (bottom_aligned:Bool=false, scrollbarx:Bool=false, scrollbary:Bool=false, w:Float=0, h:Float=0)
   {
@@ -50,12 +51,12 @@ class Pane extends Sprite {
     AEL.add(this, MouseEvent.MOUSE_WHEEL, handle_scroll_wheel);
     Util.stage.addEventListener(Event.ENTER_FRAME, handle_enter_frame);
 
-    resize();
+    _needs_resize = true;
   }
 
-  override public function set_width(w:Float):Float { _width = w; resize(); return w; }
+  override public function set_width(w:Float):Float { _width = w; _needs_resize = true; return w; }
   override public function get_width():Float { return _width; }
-  override public function set_height(h:Float):Float { _height = h; resize(); return h; }
+  override public function set_height(h:Float):Float { _height = h; _needs_resize = true; return h; }
   override public function get_height():Float { return _height; }
 
   public var innerWidth(get, null):Float;
@@ -102,8 +103,12 @@ class Pane extends Sprite {
 
   private function handle_enter_frame(e:Event):Void
   {
-    if (!_scroll_invalid) return;
+    if (_needs_resize) { _needs_resize = false; resize(); }
+    if (!_scroll_invalid) { _scroll_invalid = false; redraw_scrollbars(); }
+  }
 
+  private function redraw_scrollbars():Void
+  {
     var rect = cont.scrollRect;
     var bounds = cont.getBounds(cont);
 
@@ -193,7 +198,7 @@ class Pane extends Sprite {
 
 // UI only
 
-// populates tab container and labels container, adds mouse handlers
+// populates tab container container, adds mouse handlers
 // pubsub tab change listeners (with same tabsetid)
 // tabs hide/remove pane but must stay populated
 class TabbedPane extends Pane
@@ -203,19 +208,16 @@ class TabbedPane extends Pane
   // move cont down by tab height
   // return innerHeight smaller by tab height
   private var tab_cont:Sprite;
-  private var label_cont:Sprite;
   private var panes:Array<Pane>;
 
   public function new()
   {
     tab_cont = new Sprite();
-    label_cont = new Sprite();
     panes = [];
 
     super();
 
     addChild(tab_cont);
-    addChild(label_cont);
   }
 
   public function add_pane(p:Pane):Void
@@ -273,11 +275,6 @@ class TabbedPane extends Pane
     //albl.visible = tgt==acont;
   }
 
-  override public function set_width(w:Float):Float { _width = w; resize(); return w; }
-  override public function get_width():Float { return _width; }
-  override public function set_height(h:Float):Float { _height = h; resize(); return h; }
-  override public function get_height():Float { return _height; }
-
   override private function resize():Void
   {
     super.resize();
@@ -290,11 +287,17 @@ class TabbedPane extends Pane
         p.y = TAB_HEIGHT;
       }
     }
-    label_cont.x = innerWidth+PAD;
-    label_cont.y = tab_cont.y = PAD;
     tab_cont.x = PAD;
   }
 
+}
+
+class AbsTabularDataSource
+{
+  function get_labels():Array<String>
+  {
+    throw "AbsTabularDataSource.get_labels() is abstract";
+  }
 }
 
 // collapsable infrastructure (optional)
@@ -303,28 +306,89 @@ class TabbedPane extends Pane
 //                        maxHeight (rows), currentHeight (viusible rows)
 //                        variable row height?
 //                        Row index maps to abstract array/vector of row/col data (+ indent, height)
-//   pool of labels/containers
+//   pool of labels, containers, row LLNodes
 //   row data (strings, mapped ints?) for each column
 //   row formatter (string formatting, int-mapping to strings)
 // get label strings (abstract)
 // resort trigger
 
-class AbsSortableTabularDataPane extends Pane
+class AbsTabularDataPane extends Pane
 {
+  private static var LABEL_HEIGHT:Float = 20;
 
-  function redraw_ui()
-  { // draw labels
+  private var label_cont:Sprite;
+  private var row_cont:Pane;
+  private var _data_source:AbsTabularDataSource;
+
+  public function new(data_source:AbsTabularDataSource):Void
+  {
+    label_cont = new Sprite();
+    row_cont = new Pane(false, false, true); // scrolly
+
+    super();
+
+    cont.addChild(label_cont);
+    cont.addChild(row_cont);
+
+    _data_source = data_source;
+    redraw();
+  }
+
+  override private function resize():Void
+  {
+    super.resize();
+    row_cont.width = _width;
+    row_cont.height = _height - LABEL_HEIGHT;
+    row_cont.y = LABEL_HEIGHT;
   }
 
   function redraw()
   {
-    
+    // cleanup
+    while (label_cont.numChildren>0) label_cont.removeChildAt(0); // TODO: pool
+    while (row_cont.numChildren>0) row_cont.removeChildAt(0); // TODO: pool
+
+    // draw labels
+    draw_labels();
+    draw_rows();
   }
 
-  function get_label_strings():Array<String>
+  function draw_labels()
   {
-    throw "AbsSortableTabularDataPane.label_strings() is abstract";
+    for (lbl in _data_source.labels) {
+      var label = Util.make_label(lbl, 12);
+      label_cont.addChild(label);
+      // label.x = ?? // TODO: specify column widths? percentages? auto?
+    }
   }
+
+  function draw_rows()
+  {
+    // read from data source, draw rows, collapsable, setup linked list
+    for (row_idx=0..._data_source.num_rows) {
+      var row_sprite:Sprite = new Sprite(); // TODO: pool
+      for (col_idx=0..._data_source.num_cols) {
+        var value = Util.make_label(_data_source.get_string(row_idx, col_idx), 12);
+        row_sprite.addChild(value);
+        var indent = _data_source.get_indent(row_idx);
+        // TODO: value.x = ?? // TODO: specify column widths? percentages? auto?
+        // TODO: indent, alignment, etc
+        // TODO: draw collapsing buttons
+      }
+    }
+
+build _indent_linked_list
+
+    var sort_order:Array<Int> = _data_source.get_sort_order();
+    if (sort_order==null) {
+      for (i=0..._data_source.num_rows) {
+        
+      }
+    } else {
+      throw "TODO: support sort"
+    }
+  }
+
 }
 
 // Knows about frames / session

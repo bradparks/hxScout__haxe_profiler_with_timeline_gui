@@ -15,6 +15,7 @@ class Pane extends Sprite {
   public var PAD:Float = 6;
   public var outline:Float = 3;
   public var outline_alpha:Float = 1;
+  public var darken_alpha:Float = 0.25;
 
   public var cont(get, null):Sprite;
   var backdrop:Shape;
@@ -192,7 +193,7 @@ class Pane extends Sprite {
     // cont knockout
     var p:Float = outline;
     backdrop.graphics.lineStyle(0,0, 0);
-    backdrop.graphics.beginFill(0x000000, 0.25);
+    backdrop.graphics.beginFill(0x000000, darken_alpha);
     backdrop.graphics.drawRoundRect(p,p,_width-p*2,_height-p*2,5);
 
   }
@@ -229,13 +230,13 @@ class TabbedPane extends Pane
     // draw tab
     var tab:Sprite = new Sprite();
 
-    var label = Util.make_label(p.name, 12);
+    var label = Util.make_label(p.name, Std.int(12/20*TAB_HEIGHT));
     label.filters = [Util.TEXT_SHADOW];
     label.mouseEnabled = false;
 
     Util.begin_gradient(tab.graphics, label.width*1.4, label.height);
     tab.graphics.lineStyle(1, 0x555555);
-    tab.graphics.drawRect(0,0,label.width*1.4, label.height);
+    tab.graphics.drawRect(0,0,label.width*1.4, TAB_HEIGHT);
     label.x = label.width*0.2;
     tab.addChild(label);
 
@@ -244,6 +245,7 @@ class TabbedPane extends Pane
       var last = tab_cont.getChildAt(tab_cont.numChildren-1);
       tab.x = last.x + last.width + 5;
     }
+    tab.y = PAD;
     var idx:Int = tab_cont.numChildren;
     tab_cont.addChild(tab);
     panes.push(p);
@@ -283,7 +285,7 @@ class TabbedPane extends Pane
     for (i in 0...cont.numChildren) {
       var p:DisplayObject = cont.getChildAt(i);
       if (Std.is(p, Pane)) {
-        p.width = _width;
+        p.width = _width - 2*PAD;
         p.height = _height - TAB_HEIGHT;
         p.x = 0;
         p.y = TAB_HEIGHT;
@@ -371,12 +373,15 @@ class TabularDataPane extends Pane
   private var _row_cont:Pane;
   private var _data_source:AbsTabularDataSource;
 
-  public function new(data_source:AbsTabularDataSource, bottom_aligned:Bool=false, scrollbarx:Bool=false, scrollbary:Bool=false, w:Float=0, h:Float=0):Void
+  public function new(data_source:AbsTabularDataSource):Void
   {
     _label_cont = new Sprite();
     _row_cont = new Pane(false, false, true); // scrolly
+    _row_cont.outline = 0;
+    _row_cont.outline_alpha = 0;
+    _row_cont.darken_alpha = 0.5;
 
-    super(bottom_aligned, scrollbarx, scrollbary, w, h);
+    super();
 
     cont.addChild(_label_cont);
     cont.addChild(_row_cont);
@@ -388,7 +393,7 @@ class TabularDataPane extends Pane
   override private function resize():Void
   {
     super.resize();
-    _row_cont.width = _width;
+    _row_cont.width = _width - 2*PAD;
     _row_cont.height = _height - LABEL_HEIGHT;
     _row_cont.y = LABEL_HEIGHT;
   }
@@ -397,7 +402,7 @@ class TabularDataPane extends Pane
   {
     // cleanup
     while (_label_cont.numChildren>0) _label_cont.removeChildAt(0); // TODO: pool
-    while (_row_cont.numChildren>0) _row_cont.removeChildAt(0); // TODO: pool
+    while (_row_cont.cont.numChildren>0) _row_cont.cont.removeChildAt(0); // TODO: pool
 
     // draw labels
     draw_labels();
@@ -424,7 +429,7 @@ class TabularDataPane extends Pane
       var row_sprite:Sprite = new Sprite(); // TODO: pool
       var indent = _data_source.get_indent(row_idx);
       row_sprite.y = 20*row_idx;
-      _row_cont.addChild(row_sprite);
+      _row_cont.cont.addChild(row_sprite);
       for (col_idx in 0..._data_source.get_num_cols()) {
         var value = Util.make_label(_data_source.get_value(row_idx, col_idx), 12);
         row_sprite.addChild(value);

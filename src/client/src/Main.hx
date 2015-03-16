@@ -492,18 +492,18 @@ class HXScoutClientGUI extends Sprite
     detail_pane = new TabbedPane();
 
     sample_pane = new Pane(false, false, true);  // scrolly
-    sample_pane.outline = 2;
+    sample_pane.outline = 0;
     sample_pane.outline_alpha = 0.75;
     sample_pane.name = "Profiler";
 
     alloc_pane = new Pane(false, false, true);  // scrolly
-    alloc_pane.outline = 2;
+    alloc_pane.outline = 0;
     alloc_pane.outline_alpha = 0.75;
     alloc_pane.name = "Allocations";
 
     var ds = new SamplesTabularDataSource();
-    var foo_pane = new TabularDataPane(ds, false, false, true);  // scrolly
-    foo_pane.outline = 2;
+    var foo_pane = new TabularDataPane(ds);
+    foo_pane.outline = 0;
     foo_pane.outline_alpha = 0.75;
     foo_pane.name = "Foo";
 

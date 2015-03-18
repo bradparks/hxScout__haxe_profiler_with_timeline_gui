@@ -68,7 +68,7 @@ class Pane extends Sprite {
   public function get_innerHeight():Float { return _height-2*PAD; }
 
   public function get_cont():Sprite {
-    _scroll_invalid = true;
+    //_scroll_invalid = true; // This shouldn't be needed
     return cont;
   }
 
@@ -107,7 +107,7 @@ class Pane extends Sprite {
   private function handle_enter_frame(e:Event):Void
   {
     if (_needs_resize) { _needs_resize = false; resize(); }
-    if (!_scroll_invalid) { _scroll_invalid = false; redraw_scrollbars(); }
+    if (_scroll_invalid) { _scroll_invalid = false; redraw_scrollbars(); }
   }
 
   private function redraw_scrollbars():Void
@@ -320,10 +320,8 @@ class AbsTabularDataSource
     throw "AbsTabularDataSources is abstract";
   }
 
-  public function get_value(row_idx, col_idx):String
-  {
-    throw "AbsTabularDataSources is abstract";
-  }
+  public function get_row_name(row_idx:Int):String { throw "AbsTabularDataSources is abstract"; }
+  public function get_row_value(row_idx:Int, col_idx:Int):Float { throw "AbsTabularDataSources is abstract"; }
 }
 
 class SamplesTabularDataSource extends AbsTabularDataSource
@@ -332,7 +330,7 @@ class SamplesTabularDataSource extends AbsTabularDataSource
     super();
   }
 
-  private static var labels:Array<String> = ["Stack", "Self Time (ms)", "Total Time (ms)"];
+  private static var labels:Array<String> = ["Self Time (ms)", "Total Time (ms)"];
   override public function get_labels():Array<String> { return labels; }
 
   override public function get_num_rows():Int
@@ -340,16 +338,21 @@ class SamplesTabularDataSource extends AbsTabularDataSource
     return 200;
   }
 
-  override public function get_num_cols():Int { return 3; }
+  override public function get_num_cols():Int { return 2; }
 
   override public function get_indent(row_idx:Int):Int
   {
-    return 0;
+    return row_idx % 5;
   }
 
-  override public function get_value(row_idx, col_idx):String
+  override public function get_row_value(row_idx:Int, col_idx:Int):Float
   {
-    return "Test";
+    return Std.random(100000)/17.0;
+  }
+
+  override public function get_row_name(row_idx:Int):String
+  {
+    return "Something or other";
   }
 }
 
@@ -368,6 +371,8 @@ class SamplesTabularDataSource extends AbsTabularDataSource
 class TabularDataPane extends Pane
 {
   private static var LABEL_HEIGHT:Float = 20;
+  private static var ROW_HEIGHT:Float = 20;
+  private static var INDENT_X:Float = 20;
 
   private var _label_cont:Sprite;
   private var _row_cont:Pane;
@@ -396,6 +401,37 @@ class TabularDataPane extends Pane
     _row_cont.width = _width - 2*PAD;
     _row_cont.height = _height - LABEL_HEIGHT;
     _row_cont.y = LABEL_HEIGHT;
+
+    inline function col_width():Float {
+      return Math.max(120.0, _width*0.075);
+    }
+
+    // position labels
+    var n = _label_cont.numChildren;
+    for (i in 0...n) {
+      var label = _label_cont.getChildAt(n-i-1);
+      var w = col_width();
+      label.x = _row_cont.innerWidth - i*w - label.width - 2*PAD;
+    }
+
+    // TODO: only position visible, uncollapsed rows...
+    // position row text
+    var n = _row_cont.cont.numChildren;
+    for (row_idx in 0...n) {
+      var row:Sprite = cast(_row_cont.cont.getChildAt(row_idx), Sprite);
+      row.y = row_idx*ROW_HEIGHT;
+      row.x = 0;
+      var indent = _data_source.get_indent(row_idx);
+      row.getChildAt(0).x = INDENT_X + INDENT_X * indent;
+
+      var num_cols = row.numChildren;
+      for (i in 0...num_cols-1) {
+        var value = row.getChildAt(num_cols-i-1);
+        var w = col_width();
+        value.x = _row_cont.innerWidth - i*w - value.width - 2*PAD;
+      }
+    }
+
   }
 
   function redraw()
@@ -407,18 +443,16 @@ class TabularDataPane extends Pane
     // draw labels
     draw_labels();
     draw_rows();
+
+    resize();
   }
 
   function draw_labels()
   {
     var lbl:String;
-    var i:Int = 0;
     for (lbl in _data_source.get_labels()) {
       var label = Util.make_label(lbl, 12);
       _label_cont.addChild(label);
-      label.x = i*50;
-      // label.x = ?? // TODO: specify column widths? percentages? auto?
-      i++;
     }
   }
 
@@ -427,16 +461,20 @@ class TabularDataPane extends Pane
     // read from data source, draw rows, collapsable, setup linked list
     for (row_idx in 0..._data_source.get_num_rows()) {
       var row_sprite:Sprite = new Sprite(); // TODO: pool
-      var indent = _data_source.get_indent(row_idx);
-      row_sprite.y = 20*row_idx;
+      row_sprite.y = ROW_HEIGHT*row_idx;
       _row_cont.cont.addChild(row_sprite);
+
+      var text = Util.make_label(_data_source.get_row_name(row_idx), 12);
+      row_sprite.addChild(text);
+      // text.x = INDENT_X + INDENT_X*indent;
+      // TODO: text.x = ?? // TODO: specify column widths? percentages? auto?
+      // TODO: indent, alignment, etc
+      // TODO: draw collapsing buttons
+
       for (col_idx in 0..._data_source.get_num_cols()) {
-        var value = Util.make_label(_data_source.get_value(row_idx, col_idx), 12);
+        var value_str:String = Util.add_commas(Std.int(_data_source.get_row_value(row_idx, col_idx)));
+        var value = Util.make_label(value_str, 12);
         row_sprite.addChild(value);
-        value.x = 50*col_idx;
-        // TODO: value.x = ?? // TODO: specify column widths? percentages? auto?
-        // TODO: indent, alignment, etc
-        // TODO: draw collapsing buttons
       }
       //add_collapse_button(row_sprite); // TODO: move to private static of this class
     }

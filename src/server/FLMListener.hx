@@ -363,7 +363,8 @@ class FLMListener {
                 num -= 4;
               }
             }
-            case 14: { read_ints(flm_socket.input.readInt32()); } // collections
+            case 14: { read_ints(flm_socket.input.readInt32()); } // collections, TBD
+            case 15: { read_ints(flm_socket.input.readInt32()); } // reallocations, TBD
           }
         }
       } catch( e:Dynamic) {

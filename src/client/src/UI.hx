@@ -411,7 +411,7 @@ class TabularDataPane extends Pane
   {
     super.resize();
     _row_cont.width = _width - 2*PAD;
-    _row_cont.height = _height - LABEL_HEIGHT;
+    _row_cont.height = _height - 3*PAD - LABEL_HEIGHT;
     _row_cont.y = LABEL_HEIGHT;
 
     inline function col_width():Float {
@@ -513,13 +513,12 @@ class TabularDataPane extends Pane
                                               do_refresh_scrollbars:Void->Void):Sprite
   {
     var btn:Sprite = new Sprite();
-    //btn.graphics.lineStyle(1, 0xeeeeee, 0.2);
     btn.graphics.beginFill(0xeeeeee, 0.01);
     btn.graphics.drawCircle(0, 0, ROW_HEIGHT/3);
     btn.x = row_sprite.label.x - ROW_HEIGHT/3;
     btn.y = ROW_HEIGHT/2;
     btn.graphics.lineStyle(1,0xeeeeee,0.7);
-    btn.graphics.beginFill(0xeeeeee, 0.5);
+    btn.graphics.beginFill(0xeeeeee, 0.3);
     btn.graphics.moveTo(-ROW_HEIGHT/5, -ROW_HEIGHT/5);
     btn.graphics.lineTo( ROW_HEIGHT/5, -ROW_HEIGHT/5);
     btn.graphics.lineTo(          0,  ROW_HEIGHT/6);

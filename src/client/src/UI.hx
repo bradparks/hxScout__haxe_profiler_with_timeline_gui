@@ -431,7 +431,7 @@ class TabularDataPane extends Pane
     var n = _row_cont.cont.numChildren;
     for (row_idx in 0...n) {
       var row_sprite:TabularRowSprite = cast(_row_cont.cont.getChildAt(row_idx), TabularRowSprite);
-      row_sprite.y = row_idx*ROW_HEIGHT;
+      //row_sprite.y = row_idx*ROW_HEIGHT;
       row_sprite.x = 0;
       var indent = _data_source.get_indent(row_idx);
       row_sprite.getChildAt(0).x = INDENT_X + INDENT_X * indent;
@@ -470,6 +470,9 @@ class TabularDataPane extends Pane
 
   function draw_rows()
   {
+    var start_collapsed = true;
+    var dy = 0.0;
+
     // read from data source, draw rows, collapsable, setup linked list
     for (row_idx in 0..._data_source.get_num_rows()) {
       var row_sprite:TabularRowSprite = new TabularRowSprite(); // TODO: pool
@@ -482,14 +485,19 @@ class TabularDataPane extends Pane
       // text.x = INDENT_X + INDENT_X*indent;
       // TODO: text.x = ?? // TODO: specify column widths? percentages? auto?
       // TODO: indent, alignment, etc
-      // TODO: draw collapsing buttons
 
       var indent = _data_source.get_indent(row_idx);
       row_sprite.indent = indent;
       text.x = INDENT_X + INDENT_X * indent;
 
       if (_data_source.has_indent_children(row_idx)) {
-        row_sprite.collapse_btn = add_collapse_button(row_sprite, false, _row_cont.invalidate_scrollbars);
+        row_sprite.collapse_btn = add_collapse_button(row_sprite, start_collapsed, _row_cont.invalidate_scrollbars);
+      }
+
+      if (start_collapsed) {
+        row_sprite.visible = indent==0;
+        dy += ((indent==0) ? 0 : ROW_HEIGHT);
+        row_sprite.y -= dy;
       }
 
       for (col_idx in 0..._data_source.get_num_cols()) {

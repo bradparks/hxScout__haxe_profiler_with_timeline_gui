@@ -320,6 +320,11 @@ class AbsTabularDataSource
     throw "AbsTabularDataSources is abstract";
   }
 
+  public function has_indent_children(row_idx:Int):Bool
+  {
+    return get_num_rows()>(row_idx+1) && get_indent(row_idx) < get_indent(row_idx+1);
+  }
+
   public function get_row_name(row_idx:Int):String { throw "AbsTabularDataSources is abstract"; }
   public function get_row_value(row_idx:Int, col_idx:Int):Float { throw "AbsTabularDataSources is abstract"; }
 }
@@ -367,6 +372,13 @@ class SamplesTabularDataSource extends AbsTabularDataSource
 //   row formatter (string formatting, int-mapping to strings)
 // get label strings (abstract)
 // resort trigger
+
+class TabularRowSprite extends Sprite
+{
+  public var label:TextField;
+  public var collapse_btn:Sprite;
+  public var indent:Int;
+}
 
 class TabularDataPane extends Pane
 {
@@ -418,15 +430,15 @@ class TabularDataPane extends Pane
     // position row text
     var n = _row_cont.cont.numChildren;
     for (row_idx in 0...n) {
-      var row:Sprite = cast(_row_cont.cont.getChildAt(row_idx), Sprite);
-      row.y = row_idx*ROW_HEIGHT;
-      row.x = 0;
+      var row_sprite:TabularRowSprite = cast(_row_cont.cont.getChildAt(row_idx), TabularRowSprite);
+      row_sprite.y = row_idx*ROW_HEIGHT;
+      row_sprite.x = 0;
       var indent = _data_source.get_indent(row_idx);
-      row.getChildAt(0).x = INDENT_X + INDENT_X * indent;
+      row_sprite.getChildAt(0).x = INDENT_X + INDENT_X * indent;
 
-      var num_cols = row.numChildren;
-      for (i in 0...num_cols-1) {
-        var value = row.getChildAt(num_cols-i-1);
+      var num_cols = _data_source.get_num_cols();
+      for (i in 0...num_cols) {
+        var value = row_sprite.getChildAt(-1-i+row_sprite.numChildren);
         var w = col_width();
         value.x = _row_cont.innerWidth - i*w - value.width - 2*PAD;
       }
@@ -460,43 +472,49 @@ class TabularDataPane extends Pane
   {
     // read from data source, draw rows, collapsable, setup linked list
     for (row_idx in 0..._data_source.get_num_rows()) {
-      var row_sprite:Sprite = new Sprite(); // TODO: pool
+      var row_sprite:TabularRowSprite = new TabularRowSprite(); // TODO: pool
       row_sprite.y = ROW_HEIGHT*row_idx;
       _row_cont.cont.addChild(row_sprite);
 
       var text = Util.make_label(_data_source.get_row_name(row_idx), 12);
+      row_sprite.label = text;
       row_sprite.addChild(text);
       // text.x = INDENT_X + INDENT_X*indent;
       // TODO: text.x = ?? // TODO: specify column widths? percentages? auto?
       // TODO: indent, alignment, etc
       // TODO: draw collapsing buttons
 
+      var indent = _data_source.get_indent(row_idx);
+      row_sprite.indent = indent;
+      text.x = INDENT_X + INDENT_X * indent;
+
+      if (_data_source.has_indent_children(row_idx)) {
+        row_sprite.collapse_btn = add_collapse_button(row_sprite, false, _row_cont.invalidate_scrollbars);
+      }
+
       for (col_idx in 0..._data_source.get_num_cols()) {
         var value_str:String = Util.add_commas(Std.int(_data_source.get_row_value(row_idx, col_idx)));
         var value = Util.make_label(value_str, 12);
         row_sprite.addChild(value);
       }
-      //add_collapse_button(row_sprite); // TODO: move to private static of this class
     }
   }
 
-  private static function add_collapse_button(row_sprite:Sprite,
-                                              lbl:TextField,
+  private static function add_collapse_button(row_sprite:TabularRowSprite,
                                               is_hidden:Bool,
-                                              do_refresh_scrollbars:Void->Void):Void
+                                              do_refresh_scrollbars:Void->Void):Sprite
   {
-    var r:flash.geom.Rectangle = lbl.getBounds(row_sprite); // TODO: wasteful, const height
     var btn:Sprite = new Sprite();
     //btn.graphics.lineStyle(1, 0xeeeeee, 0.2);
     btn.graphics.beginFill(0xeeeeee, 0.01);
-    btn.graphics.drawCircle(0, 0, r.height/3);
-    btn.x = r.x-(r.height/3);
-    btn.y = r.y+r.height/2;
+    btn.graphics.drawCircle(0, 0, ROW_HEIGHT/3);
+    btn.x = row_sprite.label.x - ROW_HEIGHT/3;
+    btn.y = ROW_HEIGHT/2;
     btn.graphics.lineStyle(1,0xeeeeee,0.7);
     btn.graphics.beginFill(0xeeeeee, 0.5);
-    btn.graphics.moveTo(-r.height/5, -r.height/5);
-    btn.graphics.lineTo( r.height/5, -r.height/5);
-    btn.graphics.lineTo(          0,  r.height/6);
+    btn.graphics.moveTo(-ROW_HEIGHT/5, -ROW_HEIGHT/5);
+    btn.graphics.lineTo( ROW_HEIGHT/5, -ROW_HEIGHT/5);
+    btn.graphics.lineTo(          0,  ROW_HEIGHT/6);
     btn.rotation = is_hidden ? -90 : 0;
     row_sprite.addChild(btn);
     btn.name = "collapse_btn";
@@ -507,11 +525,11 @@ class TabularDataPane extends Pane
       var hiding = true;
       var dy = 0.0;
       for (i in (idx+1)...row_sprite.parent.numChildren) {
-        var later = row_sprite.parent.getChildAt(i);
-        if (later.x <= row_sprite.x) hiding = false;
+        var later:TabularRowSprite = cast(row_sprite.parent.getChildAt(i), TabularRowSprite);
+        if (later.label.x <= row_sprite.label.x) hiding = false;
         if (hiding && later.visible) {
           later.visible = false;
-          dy += later.height;
+          dy += ROW_HEIGHT;
         }
         later.y -= dy;
       }
@@ -522,13 +540,13 @@ class TabularDataPane extends Pane
       var idx = row_sprite.parent.getChildIndex(row_sprite);
       var showing = true;
       var dy = 0.0;
-      var at_x = recursive ? -1 : row_sprite.parent.getChildAt(idx+1).x;
+      var at_x = recursive ? -1 : cast(row_sprite.parent.getChildAt(idx+1), TabularRowSprite).label.x;
       for (i in (idx+1)...row_sprite.parent.numChildren) {
-        var later:Sprite = cast(row_sprite.parent.getChildAt(i));
-        if (later.x <= row_sprite.x) showing = false;
-        if (showing && !later.visible && (recursive || Math.abs(at_x-later.x)<0.01)) {
+        var later:TabularRowSprite = cast(row_sprite.parent.getChildAt(i));
+        if (later.label.x <= row_sprite.label.x) showing = false;
+        if (showing && !later.visible && (recursive || Math.abs(at_x-later.label.x)<0.01)) {
           later.visible = true;
-          dy += later.height;
+          dy += ROW_HEIGHT;
           // Update newly visible button
           var later_btn = later.getChildByName("collapse_btn");
           if (later_btn!=null) {
@@ -551,6 +569,8 @@ class TabularDataPane extends Pane
     }
 
     AEL.add(btn, MouseEvent.CLICK, toggle_collapse);
+
+    return btn;
   }
 
 }

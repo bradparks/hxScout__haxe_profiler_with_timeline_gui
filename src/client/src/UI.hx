@@ -382,6 +382,32 @@ class TabularRowSprite extends Sprite
   public var row_idx:Int;
 }
 
+class ToggleButton extends Sprite
+{
+  public var toggle(get,null):Bool = false;
+  public function new() { super(); redraw(); }
+  public function get_toggle():Bool { return toggle; }
+  function redraw()
+  {
+    this.graphics.clear();
+    var dx:Int = toggle ? 0 : 2;
+    this.graphics.lineStyle(1, 0xaaaaaa, 0.6);
+    this.graphics.beginFill(0xaaaaaa, 0.2);
+    this.graphics.drawRoundRect(-8,-8,16,16,4);
+    this.graphics.moveTo(-3-dx,-4);
+    this.graphics.lineTo(3-dx, -4);
+    this.graphics.moveTo(-3,0);
+    this.graphics.lineTo(3, 0);
+    this.graphics.moveTo(-3+dx,4);
+    this.graphics.lineTo(3+dx, 4);
+  }
+  public function do_toggle():Void
+  {
+    toggle = !toggle;
+    redraw();
+  }
+}
+
 class TabularDataPane extends Pane
 {
   private static var LABEL_HEIGHT:Float = 20;
@@ -389,6 +415,7 @@ class TabularDataPane extends Pane
   private static var INDENT_X:Float = 20;
 
   private var _label_cont:Sprite;
+  private var _toggle_all_btn:ToggleButton;
   private var _row_cont:Pane;
   private var _data_source:AbsTabularDataSource;
 
@@ -402,8 +429,13 @@ class TabularDataPane extends Pane
 
     super();
 
+    _toggle_all_btn = new ToggleButton();
+    _toggle_all_btn.x = _toggle_all_btn.y = 8;
+    AEL.add(_toggle_all_btn, MouseEvent.CLICK, toggle_all);
+
     cont.addChild(_label_cont);
     cont.addChild(_row_cont);
+    cont.addChild(_toggle_all_btn);
 
     _data_source = data_source;
     redraw();
@@ -419,11 +451,17 @@ class TabularDataPane extends Pane
     reposition();
   }
 
+  private var _cur_col_sort:Int = -1;
+  private var _cur_col_desc:Bool = true;
+
   private var _row_hierarchy:IntMap<Array<Int>>;
   private var _sorted_rows:Array<Int>;
   private var _sorted_lookup:IntMap<Int>;
   private function sort_on_col(col_idx:Int, descending:Bool=true, reposition_now:Bool=true):Void
   {
+    _cur_col_sort = col_idx;
+    _cur_col_desc = descending;
+
     _sorted_rows = [];
     _sorted_lookup = new IntMap<Int>();
     var desc:Int = descending ? 1 : -1;
@@ -511,7 +549,7 @@ class TabularDataPane extends Pane
       trace(e);
       trace(e.target);
       var col_idx = _label_cont.getChildIndex(e.target);
-      sort_on_col(col_idx);
+      sort_on_col(col_idx, col_idx==_cur_col_sort ? !_cur_col_desc : true);
     }
 
     var lbls:Array<String> = _data_source.get_labels();
@@ -640,6 +678,19 @@ class TabularDataPane extends Pane
     AEL.add(btn, MouseEvent.CLICK, toggle_collapse);
 
     return btn;
+  }
+
+  function toggle_all(e):Void
+  {
+    _toggle_all_btn.do_toggle();
+    var expand:Bool = _toggle_all_btn.toggle;
+
+    var n = _data_source.get_num_rows();
+    for (idx in 0...n) {
+      var row_sprite:TabularRowSprite = cast(_row_cont.cont.getChildAt(idx), TabularRowSprite);
+      row_sprite.visible = expand || row_sprite.indent==0;
+    }
+    reposition();
   }
 
 }

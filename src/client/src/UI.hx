@@ -341,7 +341,7 @@ class SamplesTabularDataSource extends AbsTabularDataSource
 
   override public function get_num_rows():Int
   {
-    return 50;
+    return 500;
   }
 
   override public function get_num_cols():Int { return 2; }
@@ -380,6 +380,7 @@ class TabularRowSprite extends Sprite
   public var collapse_btn:Sprite;
   public var indent:Int;
   public var row_idx:Int;
+  public var enable_collapse:Bool->Void;
 }
 
 class ToggleButton extends Sprite
@@ -441,6 +442,19 @@ class TabularDataPane extends Pane
     redraw();
   }
 
+  private var _did_scroll:Bool = false;
+  override private function handle_scroll_wheel(e:Event):Void
+  {
+    _did_scroll = true;
+  }
+
+  override private function handle_enter_frame(e:Event):Void
+  {
+    super.handle_enter_frame(e);
+    if (_did_scroll) revise_in_view();
+    _did_scroll = false;
+  }
+
   override private function resize():Void
   {
     super.resize();
@@ -457,6 +471,7 @@ class TabularDataPane extends Pane
   private var _row_hierarchy:IntMap<Array<Int>>;
   private var _sorted_rows:Array<Int>;
   private var _sorted_lookup:IntMap<Int>;
+  private var _row_sprites:Array<TabularRowSprite>;
   private function sort_on_col(col_idx:Int, descending:Bool=true, reposition_now:Bool=true):Void
   {
     _cur_col_sort = col_idx;
@@ -488,7 +503,9 @@ class TabularDataPane extends Pane
     // Start with the roots
     recursive_sort(_row_hierarchy.get(-1));
 
-    if (reposition_now) reposition();
+    if (reposition_now) {
+      reposition();
+    }
   }
 
   private function reposition():Void
@@ -505,16 +522,26 @@ class TabularDataPane extends Pane
       label.x = _row_cont.innerWidth - i*w - label.width - 2*PAD;
     }
 
-    // TODO: only position visible, uncollapsed rows...
     // position row text
     var n = _data_source.get_num_rows();
     var dy = 0.0;
     for (sorted_idx in 0...n) {
       var row_idx = _sorted_rows[sorted_idx];
-      var row_sprite:TabularRowSprite = cast(_row_cont.cont.getChildAt(row_idx), TabularRowSprite);
+      var row_sprite:TabularRowSprite = _row_sprites[row_idx];
       dy += row_sprite.visible ? 0 : ROW_HEIGHT;
       row_sprite.y = sorted_idx*ROW_HEIGHT-dy;
       row_sprite.x = 0;
+
+      //var r:flash.geom.Rectangle = _row_cont.cont.scrollRect;
+      //if (sorted_idx==0 ||
+      //    sorted_idx==n-1 ||
+      //    (row_sprite.y > r.y - ROW_HEIGHT &&
+      //     row_sprite.y < r.y + r.height)) {
+      //  _row_cont.cont.addChild(row_sprite);
+      //} else if (row_sprite.parent!=null) {
+      //  _row_cont.cont.removeChild(row_sprite);
+      //}
+
       var indent = _data_source.get_indent(row_idx);
       row_sprite.getChildAt(0).x = INDENT_X + INDENT_X * indent;
 
@@ -527,6 +554,67 @@ class TabularDataPane extends Pane
     }
 
     _row_cont.invalidate_scrollbars();
+
+    _first_row = 0;
+    _last_row = 0;
+    revise_in_view();
+  }
+
+  private var _first_row:Int;
+  private var _last_row:Int;
+  private var _in_view:Array<TabularRowSprite>;
+  function revise_in_view()
+  {
+    var row_sprite:TabularRowSprite;
+    var r:flash.geom.Rectangle = _row_cont.cont.scrollRect;
+    var row_idx;
+
+    row_idx = _sorted_rows[_first_row];
+    row_sprite = _row_sprites[row_idx];
+
+    while (row_sprite.y < r.y) {
+      _first_row = _first_row + 1;
+      row_idx = _sorted_rows[_first_row];
+      row_sprite = _row_sprites[row_idx];
+    }
+    while (row_sprite.y >= r.y-ROW_HEIGHT && _first_row>0) {
+      _first_row = _first_row - 1;
+      row_idx = _sorted_rows[_first_row];
+      row_sprite = _row_sprites[row_idx];
+    }
+
+    _last_row = _first_row;
+    row_idx = _sorted_rows[_last_row];
+    row_sprite = _row_sprites[row_idx];
+    while (row_sprite.y < r.y + r.height && _last_row < _sorted_rows.length) {
+      _last_row = _last_row + 1;
+      row_idx = _sorted_rows[_last_row];
+      row_sprite = _row_sprites[row_idx];
+    }
+
+    if (_in_view==null) {
+      _in_view = [];
+    } else {
+      for (rs in _in_view) {
+        if (rs.parent!=null) {
+          rs.parent.removeChild(rs);
+          if (rs.enable_collapse!=null) rs.enable_collapse(false);
+        }
+      }
+      _in_view = [];
+    }
+
+    inline function add_sorted_idx(sorted_idx):Void {
+      var row_idx = _sorted_rows[sorted_idx];
+      var row_sprite:TabularRowSprite = _row_sprites[row_idx];
+      _row_cont.cont.addChild(row_sprite);
+      _in_view.push(row_sprite);
+      if (row_sprite.enable_collapse!=null) row_sprite.enable_collapse(true);
+    }
+
+    for (sorted_idx in _first_row...(_last_row+1)) add_sorted_idx(sorted_idx);
+    add_sorted_idx(0);
+    add_sorted_idx(_sorted_rows.length-1);
   }
 
   function redraw()
@@ -534,6 +622,7 @@ class TabularDataPane extends Pane
     // cleanup
     while (_label_cont.numChildren>0) _label_cont.removeChildAt(0); // TODO: pool
     while (_row_cont.cont.numChildren>0) _row_cont.cont.removeChildAt(0); // TODO: pool
+    _row_sprites = [];
 
     // draw labels
     draw_labels();
@@ -546,8 +635,6 @@ class TabularDataPane extends Pane
   function draw_labels()
   {
     function toggle_sort(e:flash.events.Event):Void {
-      trace(e);
-      trace(e.target);
       var col_idx = _label_cont.getChildIndex(e.target);
       sort_on_col(col_idx, col_idx==_cur_col_sort ? !_cur_col_desc : true);
     }
@@ -564,6 +651,9 @@ class TabularDataPane extends Pane
   {
     var start_collapsed = true;
 
+    _first_row = 0;
+    _last_row = 0;
+
     _row_hierarchy = new IntMap<Array<Int>>();
     _row_hierarchy.set(-1, new Array<Int>());
     var last_row_idx_at_indent:IntMap<Int> = new IntMap<Int>();
@@ -573,7 +663,8 @@ class TabularDataPane extends Pane
     for (row_idx in 0..._data_source.get_num_rows()) {
       var row_sprite:TabularRowSprite = new TabularRowSprite(); // TODO: pool
       //row_sprite.y = ROW_HEIGHT*row_idx;
-      _row_cont.cont.addChild(row_sprite);
+      //_row_cont.cont.addChild(row_sprite);
+      _row_sprites.push(row_sprite);
 
       var text = Util.make_label(_data_source.get_row_name(row_idx)+" "+row_idx, 12);
       row_sprite.label = text;
@@ -629,7 +720,7 @@ class TabularDataPane extends Pane
       var hiding = true;
       var dy = 0.0;
       for (i in (sorted_idx+1)..._sorted_rows.length) {
-        var later:TabularRowSprite = cast(_row_cont.cont.getChildAt(_sorted_rows[i]), TabularRowSprite);
+        var later:TabularRowSprite = _row_sprites[_sorted_rows[i]];
         if (later.label.x <= row_sprite.label.x) hiding = false;
         if (hiding && later.visible) {
           later.visible = false;
@@ -637,6 +728,8 @@ class TabularDataPane extends Pane
         }
         later.y -= dy;
       }
+
+      revise_in_view();
     }
 
     function do_show(recursive:Bool=true):Void
@@ -644,9 +737,9 @@ class TabularDataPane extends Pane
       var sorted_idx = _sorted_lookup.get(row_sprite.row_idx);
       var showing = true;
       var dy = 0.0;
-      var at_x = recursive ? -1 : cast(_row_cont.cont.getChildAt(_sorted_rows[sorted_idx+1]), TabularRowSprite).label.x;
+      var at_x = recursive ? -1 : _row_sprites[sorted_idx+1].label.x;
       for (i in (sorted_idx+1)..._sorted_rows.length) {
-        var later:TabularRowSprite = cast(_row_cont.cont.getChildAt(_sorted_rows[i]));
+        var later:TabularRowSprite = _row_sprites[_sorted_rows[i]];
         if (later.label.x <= row_sprite.label.x) showing = false;
         if (showing && !later.visible && (recursive || Math.abs(at_x-later.label.x)<0.01)) {
           later.visible = true;
@@ -664,7 +757,7 @@ class TabularDataPane extends Pane
     function toggle_collapse(e:Event=null):Void
     {
       var sorted_idx = _sorted_lookup.get(row_sprite.row_idx);
-      var later:TabularRowSprite = (sorted_idx==_sorted_rows.length-1) ? null : cast(_row_cont.cont.getChildAt(_sorted_rows[sorted_idx+1]), TabularRowSprite);
+      var later:TabularRowSprite = (sorted_idx==_sorted_rows.length-1) ? null : _row_sprites[_sorted_rows[sorted_idx+1]];
 
       is_hidden = later==null || later.visible;
       Actuate.tween(btn, 0.2, { rotation: is_hidden ? -90 : 0 });
@@ -675,7 +768,14 @@ class TabularDataPane extends Pane
       do_refresh_scrollbars();
     }
 
-    AEL.add(btn, MouseEvent.CLICK, toggle_collapse);
+    row_sprite.enable_collapse = function(enable:Bool):Void
+    {
+      if (enable) {
+        AEL.add(btn, MouseEvent.CLICK, toggle_collapse);
+      } else {
+        AEL.remove(btn, MouseEvent.CLICK, toggle_collapse);
+      }
+    }
 
     return btn;
   }
@@ -687,9 +787,10 @@ class TabularDataPane extends Pane
 
     var n = _data_source.get_num_rows();
     for (idx in 0...n) {
-      var row_sprite:TabularRowSprite = cast(_row_cont.cont.getChildAt(idx), TabularRowSprite);
+      var row_sprite:TabularRowSprite = _row_sprites[idx];
       row_sprite.visible = expand || row_sprite.indent==0;
     }
+
     reposition();
   }
 

@@ -77,20 +77,32 @@ class Pane extends Sprite {
     _scroll_invalid = true;
   }
 
+  private var _last_wheel_event:Int = 0;
+  private var _wheel_speed:Int = 0;
   private function handle_scroll_wheel(e:Event):Void
   {
-    //trace("wheel event, delta="+cast(e).delta+", sby="+_scrollbary+", scrollrect.y="+cont.scrollRect.y);
+    var dt:Int = flash.Lib.getTimer() - _last_wheel_event;
+    var new_speed = Math.max(25, Math.min(Math.pow(500/dt, 1.6), 800));
+    _wheel_speed = dt > 300 ? 25 : Std.int(0.85*Math.abs(_wheel_speed) + 0.15*new_speed);
+    //trace("wheel event, delta="+cast(e).delta+", dt="+dt+", speed="+_wheel_speed);
+    if (cast(e).delta>0) _wheel_speed = -_wheel_speed;
+    wheel_speed_updated();
+  }
+
+  private function wheel_speed_updated()
+  {
     var r = cont.scrollRect;
     // TODO: bottom_aligned support?, +=h laster, -=h
     if (_scrollbary) {
-      r.y += (cast(e).delta<0) ? 25 : -25;
+      r.y += _wheel_speed;
       limit_scrolly(r);
     } else if (_scrollbarx) {
-      r.x += (cast(e).delta<0) ? 25 : -25;
+      r.x += _wheel_speed;
       limit_scrollx(r);
     }
     cont.scrollRect = r;
     _scroll_invalid = true;
+    _last_wheel_event = flash.Lib.getTimer();
   }
 
   private function max_scroll_y():Float {
@@ -108,6 +120,10 @@ class Pane extends Sprite {
   private function handle_enter_frame(e:Event):Void
   {
     if (_needs_resize) { _needs_resize = false; resize(); }
+    if (Math.abs(_wheel_speed) > 5 && !_scroll_invalid) {
+      _wheel_speed = Std.int(_wheel_speed*0.6);
+      wheel_speed_updated();
+    }
     if (_scroll_invalid) { _scroll_invalid = false; redraw_scrollbars(); }
   }
 
@@ -341,7 +357,7 @@ class SamplesTabularDataSource extends AbsTabularDataSource
 
   override public function get_num_rows():Int
   {
-    return 500;
+    return 15000;
   }
 
   override public function get_num_cols():Int { return 2; }
@@ -442,17 +458,11 @@ class TabularDataPane extends Pane
     redraw();
   }
 
-  private var _did_scroll:Bool = false;
-  override private function handle_scroll_wheel(e:Event):Void
-  {
-    _did_scroll = true;
-  }
-
   override private function handle_enter_frame(e:Event):Void
   {
+    var did_scroll = _scroll_invalid || Math.abs(_wheel_speed)>5;
     super.handle_enter_frame(e);
-    if (_did_scroll) revise_in_view();
-    _did_scroll = false;
+    if (did_scroll) revise_in_view();
   }
 
   override private function resize():Void

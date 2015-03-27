@@ -412,6 +412,58 @@ class AllocsTabularDataSource extends AbsTabularDataSource
   }
 }
 
+class DeallocsTabularDataSource extends AbsTabularDataSource
+{
+  private var _session:FLMSession;
+
+  public function new() {
+    super();
+  }
+
+  private var _rows:Array<CollatedDealloc>;
+  private var _depth:Array<Int>;
+  private var _names:Array<Int>;
+  public function update_dealloc_data(icd:IntMap<CollatedDealloc>, session:FLMSession):Void
+  {
+    _session = session;
+
+    _rows = [];
+    _names = [];
+
+    var keys = icd.keys();
+    for (type_id in keys) {
+      var cd:CollatedDealloc = icd.get(type_id);
+      _rows.push(cd);
+      _names.push(type_id);
+    }
+  }
+
+  private static var labels:Array<String> = ["Count", "Memory (kb)"];
+  override public function get_labels():Array<String> { return labels; }
+
+  override public function get_num_rows():Int
+  {
+    return _rows==null ? 0 : _rows.length;
+  }
+
+  override public function get_num_cols():Int { return 2; }
+
+  override public function get_indent(row_idx:Int):Int
+  {
+    return 0;
+  }
+
+  override public function get_row_value(row_idx:Int, col_idx:Int):Float
+  {
+    return col_idx==0 ? _rows[row_idx].total : _rows[row_idx].size;
+  }
+
+  override public function get_row_name(row_idx:Int):String
+  {
+    return _session.stack_strings[_names[row_idx]];
+  }
+}
+
 class FLMSession {
 
   public var frames:Array<FLMListener.Frame> = [];
@@ -463,7 +515,7 @@ class FLMSession {
     }
 
     if (frame_data.samples!=null && frame_data.samples.length>0) collate_sample_data(frame_data);
-    if (frame_data.alloc_del.length>0 || frame_data.alloc_new.length>0) collate_alloc_data(frame_data);
+    if (frame_data.mem_dealloc.length>0 || frame_data.mem_alloc.length>0) collate_alloc_data(frame_data);
 
     frames.push(frame_data);
   }
@@ -515,9 +567,9 @@ class FLMSession {
   private function collate_alloc_data(frame_data:FLMListener.Frame):Void
   {
     //trace(haxe.Json.stringify(frame_data.alloc, null, "  "));
-    var news:Array<FLMListener.NewAlloc> = frame_data.alloc_new;
+    var news:Array<FLMListener.NewAlloc> = frame_data.mem_alloc;
     //var updates:Array<Dynamic> = frame_data.alloc.updateObject;
-    var dels:Array<FLMListener.DelAlloc> = frame_data.alloc_del;
+    var dels:Array<FLMListener.DelAlloc> = frame_data.mem_dealloc;
 
     // Bottom-up objects by type
     var bottom_up = new IntMap<AllocData>();
@@ -592,6 +644,7 @@ class HXScoutClientGUI extends Sprite
   private var detail_pane:TabbedPane;
   private var sample_pane:TabularDataPane;
   private var alloc_pane:TabularDataPane;
+  private var dealloc_pane:TabularDataPane;
 
   private var active_session = -1;
   private var last_frame_drawn = -1;
@@ -603,6 +656,7 @@ class HXScoutClientGUI extends Sprite
 
   public var samples_data_source:SamplesTabularDataSource;
   public var allocs_data_source:AllocsTabularDataSource;
+  public var deallocs_data_source:DeallocsTabularDataSource;
 
   public function new()
   {
@@ -628,11 +682,11 @@ class HXScoutClientGUI extends Sprite
     alloc_pane.outline_alpha = 0.75;
     alloc_pane.name = "Allocations";
 
-    //var ds = new SamplesTabularDataSource();
-    //var foo_pane = new TabularDataPane(ds);
-    //foo_pane.outline = 0;
-    //foo_pane.outline_alpha = 0.75;
-    //foo_pane.name = "Foo";
+    deallocs_data_source = new DeallocsTabularDataSource();
+    dealloc_pane = new TabularDataPane(deallocs_data_source);
+    dealloc_pane.outline = 0;
+    dealloc_pane.outline_alpha = 0.75;
+    dealloc_pane.name = "Collections";
 
     addChild(session_pane);
     addChild(nav_pane);
@@ -644,10 +698,10 @@ class HXScoutClientGUI extends Sprite
 
     detail_pane.add_pane(sample_pane);
     detail_pane.add_pane(alloc_pane);
-    //detail_pane.add_pane(foo_pane);
+    detail_pane.add_pane(dealloc_pane);
     detail_pane.select_tab(0);
 
-    sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, summary_pane, layout, get_active_session);
+    sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, dealloc_pane, summary_pane, layout, get_active_session);
     nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane, sel_ctrl, layout, get_active_session, function() { return layout.frame_width/nav_scalex; }, function() { var tmp = active_session; set_active_session(-1); set_active_session(tmp); });
     detail_ui = new DetailUI(detail_pane, sample_pane, alloc_pane, sel_ctrl);
 
@@ -1116,6 +1170,7 @@ class SelectionController {
   private var memory_pane:Pane;
   private var sample_pane:TabularDataPane;
   private var alloc_pane:TabularDataPane;
+  private var dealloc_pane:TabularDataPane;
   private var summary_pane:Pane;
   private var layout:Dynamic;
   private var get_active_session:Void->FLMSession;
@@ -1126,7 +1181,7 @@ class SelectionController {
   public var start_sel:Int;
   public var end_sel:Int;
 
-  public function new (nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, summary_pane, layout,
+  public function new (nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, dealloc_pane, summary_pane, layout,
                        get_active_session):Void
   {
     this.nav_pane = nav_pane;
@@ -1134,6 +1189,7 @@ class SelectionController {
     this.memory_pane = memory_pane;
     this.sample_pane = sample_pane;
     this.alloc_pane = alloc_pane;
+    this.dealloc_pane = dealloc_pane;
     this.summary_pane = summary_pane;
     this.layout = layout;
     this.get_active_session = get_active_session;
@@ -1199,10 +1255,10 @@ class SelectionController {
     if (start_selection) start_sel = num;
     end_sel = num;
 
-    var r = sample_pane.cont.scrollRect; r.y = 0;
-    sample_pane.cont.scrollRect = r;
-    var r = alloc_pane.cont.scrollRect; r.y = 0;
-    alloc_pane.cont.scrollRect = r;
+    //var r = sample_pane.cont.scrollRect; r.y = 0;
+    //sample_pane.cont.scrollRect = r;
+    //var r = alloc_pane.cont.scrollRect; r.y = 0;
+    //alloc_pane.cont.scrollRect = r;
 
     redraw();
   }
@@ -1550,67 +1606,68 @@ class SelectionController {
     // - - - - - - - - - - - - - - -
     // - - Alloc pane deallocs (temp) - -
     // - - - - - - - - - - - - - - -
-    if (false && alloc_pane.visible) {
-
-      var deallocs:IntMap<CollatedDealloc> = new IntMap<CollatedDealloc>();
-      var total:Int = 0;
-      var total_size:Int = 0;
-      each_frame(function(f:FLMListener.Frame) {
-        for (i in 0...f.alloc_del.length) {
-          var d = f.alloc_del[i];
-          var item:FLMListener.NewAlloc = session.alloc_guid_to_newalloc.get(d.guid);
-          var type:Int = item.type;
-          if (!deallocs.exists(type)) {
-            deallocs.set(type, {total:0,size:0});
-          }
-          var cd = deallocs.get(type);
-          total++;
-          cd.total++;
-          total_size += item.size;
-          cd.size += item.size;
+    var deallocs:IntMap<CollatedDealloc> = new IntMap<CollatedDealloc>();
+    var total:Int = 0;
+    var total_size:Int = 0;
+    each_frame(function(f:FLMListener.Frame) {
+      for (i in 0...f.mem_dealloc.length) {
+        var d = f.mem_dealloc[i];
+        var item:FLMListener.NewAlloc = session.alloc_guid_to_newalloc.get(d.guid);
+        var type:Int = item.type;
+        if (!deallocs.exists(type)) {
+          deallocs.set(type, {total:0,size:0});
         }
-      });
-
-      if (total>0) {
-        y = 0;
-        for (type_int in deallocs.keys()) {
-          var cd = deallocs.get(type_int);
-          var type:String = session.stack_strings[type_int];
-
-          // type name formatting
-          if (type.substr(0,7)=='[object') type = type.substr(8, type.length-9);
-          if (type.substr(0,6)=='[class') type = type.substr(7, type.length-8);
-          type = (~/\$$/).replace(type, ' <static>');
-          var clo = type.indexOf('::');
-          if (clo>=0) {
-            type = 'Closure ['+type.substr(clo+2)+' ('+type.substr(0,clo)+')]';
-          }
-
-          var lbl = Util.make_label(type, 12, 0x227788);
-          var cont = new Sprite();
-          cont.y = y;
-          cont.x = 15;
-          cont.addChild(lbl);
-          alloc_pane.cont.addChild(cont);
-
-          inline function draw_pct(cont, val:Int, total:Int, offset:Float) {
-            var unit:Int = Math.floor(val*100/total);
-
-            var num = Util.make_label((val==0)?"< 1" : Util.add_commas(val), 12, 0xeeeeee);
-            num.x = offset - 70 - num.width;
-            cont.addChild(num);
-
-            var numpctunit = Util.make_label(unit+" %", 12, 0xeeeeee);
-            numpctunit.x = offset - 25 - numpctunit.width;
-            cont.addChild(numpctunit);
-          }
-          draw_pct(cont, cd.total, total, alloc_pane.innerWidth-120);
-          draw_pct(cont, Math.round(cd.size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10);
-
-          y += lbl.height;
-        }
+        var cd = deallocs.get(type);
+        total++;
+        cd.total++;
+        total_size += item.size;
+        cd.size += item.size;
       }
-    }
+    });
+
+    cast(dealloc_pane.data_source, DeallocsTabularDataSource).update_dealloc_data(deallocs, session);
+    dealloc_pane.redraw();
+
+
+    //  if (total>0) {
+    //    y = 0;
+    //    for (type_int in deallocs.keys()) {
+    //      var cd = deallocs.get(type_int);
+    //      var type:String = session.stack_strings[type_int];
+    // 
+    //      // type name formatting
+    //      if (type.substr(0,7)=='[object') type = type.substr(8, type.length-9);
+    //      if (type.substr(0,6)=='[class') type = type.substr(7, type.length-8);
+    //      type = (~/\$$/).replace(type, ' <static>');
+    //      var clo = type.indexOf('::');
+    //      if (clo>=0) {
+    //        type = 'Closure ['+type.substr(clo+2)+' ('+type.substr(0,clo)+')]';
+    //      }
+    // 
+    //      var lbl = Util.make_label(type, 12, 0x227788);
+    //      var cont = new Sprite();
+    //      cont.y = y;
+    //      cont.x = 15;
+    //      cont.addChild(lbl);
+    //      alloc_pane.cont.addChild(cont);
+    // 
+    //      inline function draw_pct(cont, val:Int, total:Int, offset:Float) {
+    //        var unit:Int = Math.floor(val*100/total);
+    // 
+    //        var num = Util.make_label((val==0)?"< 1" : Util.add_commas(val), 12, 0xeeeeee);
+    //        num.x = offset - 70 - num.width;
+    //        cont.addChild(num);
+    // 
+    //        var numpctunit = Util.make_label(unit+" %", 12, 0xeeeeee);
+    //        numpctunit.x = offset - 25 - numpctunit.width;
+    //        cont.addChild(numpctunit);
+    //      }
+    //      draw_pct(cont, cd.total, total, alloc_pane.innerWidth-120);
+    //      draw_pct(cont, Math.round(cd.size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10);
+    // 
+    //      y += lbl.height;
+    //    }
+    //  }
 
     // - - - - - - - - - - - - - - -
     // - - Alloc pane - -

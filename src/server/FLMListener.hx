@@ -126,11 +126,11 @@ class FLMListener {
             trace("TODO, FLM, stackid -= 1 (hxt is 0-indexed, flm is 1-indexed)");
             // HXT type strings are stored in the stack_strings lookup, FLM,
             // we'll have to store them elsewhere.
-						cur_frame.alloc_new.push(n);
+						cur_frame.mem_alloc.push(n);
 					}
 					case "deleteObject": {
 						var d:DelAlloc = data["value"];
-						cur_frame.alloc_del.push(d);
+						cur_frame.mem_dealloc.push(d);
 					}
 				}
 				// newObject, deleteObject, updateObject
@@ -359,11 +359,21 @@ class FLMListener {
                   size:flm_socket.input.readInt32(),
                   guid:0
                 }
-                cur_frame.alloc_new.push(n);
+                cur_frame.mem_alloc.push(n);
                 num -= 4;
               }
             }
-            case 14: { read_ints(flm_socket.input.readInt32()); } // collections, TBD
+            case 14: { // collections
+              var num:Int = flm_socket.input.readInt32();
+              while (num>0) {
+                var n:DelAlloc = {
+                  id:flm_socket.input.readInt32(),
+                  guid:0
+                }
+                cur_frame.mem_dealloc.push(n);
+                num -= 1;
+              }
+            }
             case 15: { read_ints(flm_socket.input.readInt32()); } // reallocations, TBD
           }
         }
@@ -414,8 +424,8 @@ class Frame {
   public var push_stack_maps:Array<Array<Int>>;
   public var cpu:Float;
   //public var alloc:StringMap<Array<Dynamic>>;
-  public var alloc_new:Array<NewAlloc>;
-  public var alloc_del:Array<DelAlloc>;
+  public var mem_alloc:Array<NewAlloc>;
+  public var mem_dealloc:Array<DelAlloc>;
   //public var events:Array<Dynamic>;
 
   public var prof_top_down:Dynamic;
@@ -446,8 +456,8 @@ class Frame {
     cpu = 0;
     // TODO: conditional allocation based on enabled metrics
     samples = new Array<SampleRaw>();
-    alloc_new = new Array<NewAlloc>();
-    alloc_del = new Array<DelAlloc>();
+    mem_alloc = new Array<NewAlloc>();
+    mem_dealloc = new Array<DelAlloc>();
 #if DEBUG_UNKNOWN
     unknown_names = [];
 #end

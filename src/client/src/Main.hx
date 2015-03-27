@@ -9,7 +9,8 @@ import haxe.ds.IntMap;
 
 import UI.Pane;
 import UI.TabbedPane;
-import UI.SamplesTabularDataSource;
+import UI.AbsTabularDataSource;
+import UI.ExampleTabularDataSource;
 import UI.TabularDataPane;
 
 class Main extends Sprite {
@@ -291,6 +292,69 @@ typedef CollatedDealloc = {
   size:Int
 };
 
+class SamplesTabularDataSource extends AbsTabularDataSource
+{
+  private var _sample_data:SampleData;
+  private var _session:FLMSession;
+
+  public function new() {
+    super();
+  }
+
+  private var _rows:Array<SampleData>;
+  private var _depth:Array<Int>;
+  private var _names:Array<Int>;
+  public function update_sample_data(sd:SampleData, session:FLMSession):Void
+  {
+    _sample_data = sd;
+    _session = session;
+
+    _rows = [];
+    _depth = [];
+    _names = [];
+    function recurse(sd:SampleData, depth:Int, idx:Int):Void
+    {
+      if (depth>=0) {
+        _rows.push(sd);
+        _depth.push(depth);
+        _names.push(idx);
+      }
+      var keys = sd.children.keys();
+      for (i in keys) {
+        var child:SampleData = sd.children.get(i);
+        recurse(child, depth+1, i);
+      }
+    }
+    recurse(sd, -1, -1);
+    trace("Computed rows: "+_rows.length);
+  }
+
+  private static var labels:Array<String> = ["Self Time (ms)", "Total Time (ms)"];
+  override public function get_labels():Array<String> { return labels; }
+
+  override public function get_num_rows():Int
+  {
+    return _rows==null ? 0 : _rows.length;
+  }
+
+  override public function get_num_cols():Int { return 2; }
+
+  override public function get_indent(row_idx:Int):Int
+  {
+    return _depth[row_idx];
+  }
+
+  override public function get_row_value(row_idx:Int, col_idx:Int):Float
+  {
+    return col_idx==0 ? _rows[row_idx].self_time : _rows[row_idx].total_time;
+  }
+
+  override public function get_row_name(row_idx:Int):String
+  {
+    return _session.stack_strings[_names[row_idx]];
+  }
+}
+
 class FLMSession {
 
   public var frames:Array<FLMListener.Frame> = [];
@@ -469,7 +533,7 @@ class HXScoutClientGUI extends Sprite
   private var memory_pane:Pane;
   private var session_pane:Pane;
   private var detail_pane:TabbedPane;
-  private var sample_pane:Pane;
+  private var sample_pane:TabularDataPane;
   private var alloc_pane:Pane;
 
   private var active_session = -1;
@@ -479,6 +543,8 @@ class HXScoutClientGUI extends Sprite
   private var nav_ctrl:NavController;
   private var sel_ctrl:SelectionController;
   private var detail_ui:DetailUI;
+
+  public var samples_data_source:SamplesTabularDataSource;
 
   public function new()
   {
@@ -491,7 +557,9 @@ class HXScoutClientGUI extends Sprite
     session_pane = new Pane(false, false, true); // scrolly
     detail_pane = new TabbedPane();
 
-    sample_pane = new Pane(false, false, true);  // scrolly
+    samples_data_source = new SamplesTabularDataSource();
+    sample_pane = new TabularDataPane(samples_data_source);
+    //sample_pane = new TabularDataPane(new ExampleTabularDataSource());
     sample_pane.outline = 0;
     sample_pane.outline_alpha = 0.75;
     sample_pane.name = "Profiler";
@@ -501,11 +569,11 @@ class HXScoutClientGUI extends Sprite
     alloc_pane.outline_alpha = 0.75;
     alloc_pane.name = "Allocations";
 
-    var ds = new SamplesTabularDataSource();
-    var foo_pane = new TabularDataPane(ds);
-    foo_pane.outline = 0;
-    foo_pane.outline_alpha = 0.75;
-    foo_pane.name = "Foo";
+    //var ds = new SamplesTabularDataSource();
+    //var foo_pane = new TabularDataPane(ds);
+    //foo_pane.outline = 0;
+    //foo_pane.outline_alpha = 0.75;
+    //foo_pane.name = "Foo";
 
     addChild(session_pane);
     addChild(nav_pane);
@@ -516,8 +584,8 @@ class HXScoutClientGUI extends Sprite
     addChild(detail_pane);
 
     detail_pane.add_pane(sample_pane);
-    detail_pane.add_pane(alloc_pane);
-    detail_pane.add_pane(foo_pane);
+    //detail_pane.add_pane(alloc_pane);
+    //detail_pane.add_pane(foo_pane);
     detail_pane.select_tab(0);
 
     sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, summary_pane, layout, get_active_session);
@@ -661,9 +729,9 @@ class HXScoutClientGUI extends Sprite
     while (timing_pane.cont.numChildren>0) timing_pane.cont.removeChildAt(0);
     timing_pane.cont.graphics.clear();
     while (memory_pane.cont.numChildren>0) memory_pane.cont.removeChildAt(0);
-    while (sample_pane.cont.numChildren>0) sample_pane.cont.removeChildAt(0);
+    //while (sample_pane.cont.numChildren>0) sample_pane.cont.removeChildAt(0);
     while (summary_pane.cont.numChildren>0) summary_pane.cont.removeChildAt(0);
-    sample_pane.cont.graphics.clear();
+    //sample_pane.cont.graphics.clear();
 
     timing_shapes = [];
     memory_shapes = [];
@@ -931,7 +999,7 @@ class NavController {
 
     //redraw();
 
-    sel_ctrl.redraw();
+    sel_ctrl.redraw_selection();
   }
 
   function redraw(e:Event=null):Void
@@ -987,7 +1055,7 @@ class SelectionController {
   private var nav_pane:Pane;
   private var timing_pane:Pane;
   private var memory_pane:Pane;
-  private var sample_pane:Pane;
+  private var sample_pane:TabularDataPane;
   private var alloc_pane:Pane;
   private var summary_pane:Pane;
   private var layout:Dynamic;
@@ -1114,20 +1182,23 @@ class SelectionController {
   public function handle_sort_size(e:Event=null):Void { _alloc_sort_count = false; redraw(); }
   public function handle_sort_count(e:Event=null):Void { _alloc_sort_count = true; redraw(); }
 
+  private var selection_invalid:Bool = false;
+  public function redraw_selection() { selection_invalid = true; }
+
   private var invalid:Bool = false;
   public function redraw() { invalid = true; }
   private function handle_enter_frame(e:Event):Void
   {
-    if (!invalid) return;
+    if (invalid || selection_invalid) do_redraw();
     invalid = false;
+    selection_invalid = false;
+  }
 
+  private function do_redraw():Void
+  {
+    //while (sample_pane.cont.numChildren>0) sample_pane.cont.removeChildAt(0);
+    //sample_pane.cont.graphics.clear();
     selection.graphics.clear();
-    while (sample_pane.cont.numChildren>0) sample_pane.cont.removeChildAt(0);
-    sample_pane.cont.graphics.clear();
-    while (alloc_pane.cont.numChildren>0) alloc_pane.cont.removeChildAt(0);
-    alloc_pane.cont.graphics.clear();
-    while (summary_pane.cont.numChildren>0) summary_pane.cont.removeChildAt(0);
-    summary_pane.cont.graphics.clear();
 
     var session:FLMSession = get_active_session();
     if (session==null) return;
@@ -1155,6 +1226,13 @@ class SelectionController {
 
     // Update summary, samples, etc
     //trace(frame);
+
+    if (!invalid) return;
+
+    while (alloc_pane.cont.numChildren>0) alloc_pane.cont.removeChildAt(0);
+    alloc_pane.cont.graphics.clear();
+    while (summary_pane.cont.numChildren>0) summary_pane.cont.removeChildAt(0);
+    summary_pane.cont.graphics.clear();
 
     inline function each_frame(f:Dynamic->Void):Void {
       var idx;
@@ -1341,72 +1419,75 @@ class SelectionController {
         total += f.duration.as/1000;
       });
 
-      var y:Float = 0;
-      var ping = true;
-      function display_samples(ptr:SampleData, indent:Int=0):Void
-      {
-        var keys = ptr.children.keys();
-        var sorted:Array<Int> = new Array<Int>();
-        for (key in keys) sorted.push(key);
-        sorted.sort(function(i0:Int, i1:Int):Int {
-          var sd0 = ptr.children.get(i0);
-          var sd1 = ptr.children.get(i1);
-          if (_prof_sort_self) return sd0.self_time > sd1.self_time ? -1 :
-                                 (sd0.self_time < sd1.self_time ? 1 : 0);
-          return sd0.total_time > sd1.total_time ? -1 :
-            (sd0.total_time < sd1.total_time ? 1 : 0);
-        });
+      cast(sample_pane.data_source, SamplesTabularDataSource).update_sample_data(sample_data, session);
+      sample_pane.redraw();
 
-        for (i in sorted) {
-          var sample = ptr.children.get(i);
-
-          var cont:Sprite = new Sprite();
-          cont.y = y;
-          cont.x = 15+indent*15;
-
-          var lbl = Util.make_label(session.stack_strings[i], 12, 0x66aadd);
-          lbl.x = 0;
-          cont.addChild(lbl);
-
-          if (sample.children.keys().hasNext()) Util.add_collapse_button(cont, lbl, false, sample_pane.invalidate_scrollbars);
-
-          ping = !ping;
-          if (ping) {
-            sample_pane.cont.graphics.beginFill(0xffffff, 0.02);
-            sample_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,lbl.height);
-          }
-
-          // I'd use round, but Scout seems to use floor
-          var pct = Math.max(0, Math.min(100, Math.floor(100*sample.total_time/total)))+"%";
-          var x:Float = sample_pane.innerWidth - 20 - (cont.x + 15);
-          lbl = Util.make_label(pct, 12, 0xeeeeee);
-          lbl.x = x - lbl.width;
-          cont.addChild(lbl);
-          x -= 60;
-
-          lbl = Util.make_label(cast(sample.total_time), 12, 0xeeeeee);
-          lbl.x = x - lbl.width;
-          cont.addChild(lbl);
-          x -= 80;
-
-          // I'd use round, but Scout seems to use floor
-          var pct = Math.max(0, Math.min(100, Math.floor(100*sample.self_time/total)))+"%";
-          lbl = Util.make_label(pct, 12, 0xeeeeee);
-          lbl.x = x - lbl.width;
-          cont.addChild(lbl);
-          x -= 60;
-
-          lbl = Util.make_label(cast(sample.self_time), 12, 0xeeeeee);
-          lbl.x = x - lbl.width;
-          cont.addChild(lbl);
-
-          sample_pane.cont.addChild(cont);
-
-          y += lbl.height;
-          display_samples(sample, indent+1);
-        }
-      }
-      display_samples(sample_data);
+      // var y:Float = 0;
+      // var ping = true;
+      // function display_samples(ptr:SampleData, indent:Int=0):Void
+      // {
+      //   var keys = ptr.children.keys();
+      //   var sorted:Array<Int> = new Array<Int>();
+      //   for (key in keys) sorted.push(key);
+      //   sorted.sort(function(i0:Int, i1:Int):Int {
+      //     var sd0 = ptr.children.get(i0);
+      //     var sd1 = ptr.children.get(i1);
+      //     if (_prof_sort_self) return sd0.self_time > sd1.self_time ? -1 :
+      //                            (sd0.self_time < sd1.self_time ? 1 : 0);
+      //     return sd0.total_time > sd1.total_time ? -1 :
+      //       (sd0.total_time < sd1.total_time ? 1 : 0);
+      //   });
+      //  
+      //   for (i in sorted) {
+      //     var sample = ptr.children.get(i);
+      //  
+      //     var cont:Sprite = new Sprite();
+      //     cont.y = y;
+      //     cont.x = 15+indent*15;
+      //  
+      //     var lbl = Util.make_label(session.stack_strings[i], 12, 0x66aadd);
+      //     lbl.x = 0;
+      //     cont.addChild(lbl);
+      //  
+      //     if (sample.children.keys().hasNext()) Util.add_collapse_button(cont, lbl, false, sample_pane.invalidate_scrollbars);
+      //  
+      //     ping = !ping;
+      //     if (ping) {
+      //       sample_pane.cont.graphics.beginFill(0xffffff, 0.02);
+      //       sample_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,lbl.height);
+      //     }
+      //  
+      //     // I'd use round, but Scout seems to use floor
+      //     var pct = Math.max(0, Math.min(100, Math.floor(100*sample.total_time/total)))+"%";
+      //     var x:Float = sample_pane.innerWidth - 20 - (cont.x + 15);
+      //     lbl = Util.make_label(pct, 12, 0xeeeeee);
+      //     lbl.x = x - lbl.width;
+      //     cont.addChild(lbl);
+      //     x -= 60;
+      //  
+      //     lbl = Util.make_label(cast(sample.total_time), 12, 0xeeeeee);
+      //     lbl.x = x - lbl.width;
+      //     cont.addChild(lbl);
+      //     x -= 80;
+      //  
+      //     // I'd use round, but Scout seems to use floor
+      //     var pct = Math.max(0, Math.min(100, Math.floor(100*sample.self_time/total)))+"%";
+      //     lbl = Util.make_label(pct, 12, 0xeeeeee);
+      //     lbl.x = x - lbl.width;
+      //     cont.addChild(lbl);
+      //     x -= 60;
+      //  
+      //     lbl = Util.make_label(cast(sample.self_time), 12, 0xeeeeee);
+      //     lbl.x = x - lbl.width;
+      //     cont.addChild(lbl);
+      //  
+      //     sample_pane.cont.addChild(cont);
+      //  
+      //     y += lbl.height;
+      //     display_samples(sample, indent+1);
+      //   }
+      // }
+      // display_samples(sample_data);
 
     }
 
@@ -1664,7 +1745,7 @@ class DetailUI {
     plbl.addChild(plbl_self);
     plbl.addChild(plbl_total);
     plbl_total.x = 130;
-    detail_pane.cont.addChild(plbl);
+    //detail_pane.cont.addChild(plbl);
     AEL.add(plbl_self, MouseEvent.CLICK, sel_ctrl.handle_sort_self);
     AEL.add(plbl_total, MouseEvent.CLICK, sel_ctrl.handle_sort_total);
 
@@ -1674,7 +1755,7 @@ class DetailUI {
     albl.addChild(albl_size);
     albl.addChild(albl_count);
     albl_size.x = 130;
-    detail_pane.cont.addChild(albl);
+    //detail_pane.cont.addChild(albl);
     AEL.add(albl_size, MouseEvent.CLICK, sel_ctrl.handle_sort_size);
     AEL.add(albl_count, MouseEvent.CLICK, sel_ctrl.handle_sort_count);
 
@@ -1705,7 +1786,7 @@ class DetailUI {
 
     pcont.transform.colorTransform = tgt==pcont ? highlight_on : highlight_off;
     acont.transform.colorTransform = tgt==acont ? highlight_on : highlight_off;
-    sample_pane.visible = tgt==pcont;
+    sample_pane.visible = true; //tgt==pcont;
     alloc_pane.visible = tgt==acont;
     plbl.visible = tgt==pcont;
     albl.visible = tgt==acont;

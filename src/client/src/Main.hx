@@ -326,7 +326,6 @@ class SamplesTabularDataSource extends AbsTabularDataSource
       }
     }
     recurse(sd, -1, -1);
-    trace("Computed rows: "+_rows.length);
   }
 
   private static var labels:Array<String> = ["Self Time (ms)", "Total Time (ms)"];
@@ -347,6 +346,64 @@ class SamplesTabularDataSource extends AbsTabularDataSource
   override public function get_row_value(row_idx:Int, col_idx:Int):Float
   {
     return col_idx==0 ? _rows[row_idx].self_time : _rows[row_idx].total_time;
+  }
+
+  override public function get_row_name(row_idx:Int):String
+  {
+    return _session.stack_strings[_names[row_idx]];
+  }
+}
+
+class AllocsTabularDataSource extends AbsTabularDataSource
+{
+  private var _session:FLMSession;
+
+  public function new() {
+    super();
+  }
+
+  private var _rows:Array<AllocData>;
+  private var _depth:Array<Int>;
+  private var _names:Array<Int>;
+  public function update_alloc_data(iad:IntMap<AllocData>, session:FLMSession):Void
+  {
+    _session = session;
+
+    _rows = [];
+    _depth = [];
+    _names = [];
+    function recurse(iad:IntMap<AllocData>, depth:Int):Void
+    {
+      var keys = iad.keys();
+      for (type_id in keys) {
+        var ad:AllocData = iad.get(type_id);
+        _rows.push(ad);
+        _depth.push(depth);
+        _names.push(type_id);
+        recurse(ad.children, depth+1);
+      }
+    }
+    recurse(iad, 0);
+  }
+
+  private static var labels:Array<String> = ["Count", "Memory (kb)"];
+  override public function get_labels():Array<String> { return labels; }
+
+  override public function get_num_rows():Int
+  {
+    return _rows==null ? 0 : _rows.length;
+  }
+
+  override public function get_num_cols():Int { return 2; }
+
+  override public function get_indent(row_idx:Int):Int
+  {
+    return _depth[row_idx];
+  }
+
+  override public function get_row_value(row_idx:Int, col_idx:Int):Float
+  {
+    return col_idx==0 ? _rows[row_idx].total_num : _rows[row_idx].total_size;
   }
 
   override public function get_row_name(row_idx:Int):String
@@ -534,7 +591,7 @@ class HXScoutClientGUI extends Sprite
   private var session_pane:Pane;
   private var detail_pane:TabbedPane;
   private var sample_pane:TabularDataPane;
-  private var alloc_pane:Pane;
+  private var alloc_pane:TabularDataPane;
 
   private var active_session = -1;
   private var last_frame_drawn = -1;
@@ -545,6 +602,7 @@ class HXScoutClientGUI extends Sprite
   private var detail_ui:DetailUI;
 
   public var samples_data_source:SamplesTabularDataSource;
+  public var allocs_data_source:AllocsTabularDataSource;
 
   public function new()
   {
@@ -564,7 +622,8 @@ class HXScoutClientGUI extends Sprite
     sample_pane.outline_alpha = 0.75;
     sample_pane.name = "Profiler";
 
-    alloc_pane = new Pane(false, false, true);  // scrolly
+    allocs_data_source = new AllocsTabularDataSource();
+    alloc_pane = new TabularDataPane(allocs_data_source);
     alloc_pane.outline = 0;
     alloc_pane.outline_alpha = 0.75;
     alloc_pane.name = "Allocations";
@@ -584,7 +643,7 @@ class HXScoutClientGUI extends Sprite
     addChild(detail_pane);
 
     detail_pane.add_pane(sample_pane);
-    //detail_pane.add_pane(alloc_pane);
+    detail_pane.add_pane(alloc_pane);
     //detail_pane.add_pane(foo_pane);
     detail_pane.select_tab(0);
 
@@ -1056,7 +1115,7 @@ class SelectionController {
   private var timing_pane:Pane;
   private var memory_pane:Pane;
   private var sample_pane:TabularDataPane;
-  private var alloc_pane:Pane;
+  private var alloc_pane:TabularDataPane;
   private var summary_pane:Pane;
   private var layout:Dynamic;
   private var get_active_session:Void->FLMSession;
@@ -1229,8 +1288,8 @@ class SelectionController {
 
     if (!invalid) return;
 
-    while (alloc_pane.cont.numChildren>0) alloc_pane.cont.removeChildAt(0);
-    alloc_pane.cont.graphics.clear();
+    //while (alloc_pane.cont.numChildren>0) alloc_pane.cont.removeChildAt(0);
+    //alloc_pane.cont.graphics.clear();
     while (summary_pane.cont.numChildren>0) summary_pane.cont.removeChildAt(0);
     summary_pane.cont.graphics.clear();
 
@@ -1410,17 +1469,15 @@ class SelectionController {
     // - - - - - - - - - - - - - - -
     // - - Samples pane - -
     // - - - - - - - - - - - - - - -
-    if (sample_pane.visible) {
+    var sample_data = new SampleData();
+    var total:Float = 0;
+    each_frame(function(f) {
+      if (f.prof_top_down!=null) SampleData.merge_sample_data(sample_data, f.prof_top_down);
+      total += f.duration.as/1000;
+    });
 
-      var sample_data = new SampleData();
-      var total:Float = 0;
-      each_frame(function(f) {
-        if (f.prof_top_down!=null) SampleData.merge_sample_data(sample_data, f.prof_top_down);
-        total += f.duration.as/1000;
-      });
-
-      cast(sample_pane.data_source, SamplesTabularDataSource).update_sample_data(sample_data, session);
-      sample_pane.redraw();
+    cast(sample_pane.data_source, SamplesTabularDataSource).update_sample_data(sample_data, session);
+    sample_pane.redraw();
 
       // var y:Float = 0;
       // var ping = true;
@@ -1488,8 +1545,6 @@ class SelectionController {
       //   }
       // }
       // display_samples(sample_data);
-
-    }
 
 
     // - - - - - - - - - - - - - - -
@@ -1560,139 +1615,139 @@ class SelectionController {
     // - - - - - - - - - - - - - - -
     // - - Alloc pane - -
     // - - - - - - - - - - - - - - -
-    if (true && alloc_pane.visible) {
+    var allocs:IntMap<AllocData> = new IntMap<AllocData>();
+    var total_num = 0;
+    var total_size = 0;
+    each_frame(function(f) { // also updateObjects?
+      var frame_allocs:IntMap<AllocData> = f.alloc_bottom_up;
+      if (frame_allocs!=null) {
+        for (type in frame_allocs.keys()) {
+          if (!allocs.exists(type)) allocs.set(type, new AllocData());
+          var ad:AllocData = allocs.get(type);
 
-      var allocs:IntMap<AllocData> = new IntMap<AllocData>();
-      var total_num = 0;
-      var total_size = 0;
-      each_frame(function(f) { // also updateObjects?
-        var frame_allocs:IntMap<AllocData> = f.alloc_bottom_up;
-        if (frame_allocs!=null) {
-          for (type in frame_allocs.keys()) {
-            if (!allocs.exists(type)) allocs.set(type, new AllocData());
-            var ad:AllocData = allocs.get(type);
-
-            function merge_children(tgt:AllocData, src:AllocData) {
-              tgt.total_size += src.total_size;
-              tgt.total_num += src.total_num;
-              tgt.callstack_id = src.callstack_id;
-              total_size += src.total_size;
-              total_num += src.total_num;
-              for (key in src.children.keys()) {
-                if (!tgt.children.exists(key)) tgt.children.set(key, new AllocData());
-                merge_children(tgt.children.get(key), src.children.get(key));
-              }
-            }
-            merge_children(ad, frame_allocs.get(type));
-          }
-        }
-      });
-
-      //trace(allocs);
-      var y:Float = 0;
-      var ping = true;
-
-      var keys = allocs.keys();
-      var sorted:Array<Int> = new Array<Int>();
-      for (key in keys) sorted.push(key);
-      sorted.sort(function(i0:Int, i1:Int):Int {
-        var ad0 = allocs.get(i0);
-        var ad1 = allocs.get(i1);
-        if (_alloc_sort_count) return ad0.total_num > ad1.total_num ? -1 : (ad0.total_num < ad1.total_num ? 1 : 0);
-        return ad0.total_size > ad1.total_size ? -1 : (ad0.total_size < ad1.total_size ? 1 : 0);
-      });
-
-      for (type_int in sorted) {
-        var ad = allocs.get(type_int);
-        var type = session.stack_strings[type_int];
-
-        // type name formatting
-        if (type.substr(0,7)=='[object') type = type.substr(8, type.length-9);
-        if (type.substr(0,6)=='[class') type = type.substr(7, type.length-8);
-        type = (~/\$$/).replace(type, ' <static>');
-        var clo = type.indexOf('::');
-        if (clo>=0) {
-          type = 'Closure ['+type.substr(clo+2)+' ('+type.substr(0,clo)+')]';
-        }
-
-        var lbl = Util.make_label(type, 12, 0x227788);
-        var cont = new Sprite();
-        cont.y = y;
-        cont.x = 15;
-        cont.addChild(lbl);
-        alloc_pane.cont.addChild(cont);
-
-        inline function draw_pct(cont, val:Int, total:Int, offset:Float) {
-          var unit:Int = Math.floor(val*100/total);
-
-          var num = Util.make_label((val==0)?"< 1" : Util.add_commas(val), 12, 0xeeeeee);
-          num.x = offset - 70 - num.width;
-          cont.addChild(num);
-
-          var numpctunit = Util.make_label(unit+" %", 12, 0xeeeeee);
-          numpctunit.x = offset - 25 - numpctunit.width;
-          cont.addChild(numpctunit);
-        }
-        draw_pct(cont, ad.total_num, total_num, alloc_pane.innerWidth-120);
-        draw_pct(cont, Math.round(ad.total_size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10);
-
-        // TODO: background graphics on special shape
-        //ping = !ping;
-        //if (ping) {
-        //  alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
-        //  alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,lbl.height);
-        //}
-
-        y += lbl.height;
-
-        // merged stacks (bottom-up objects)
-        if (ad.children.keys().hasNext()) {
-          Util.add_collapse_button(cont, lbl, false, alloc_pane.invalidate_scrollbars);
-
-          inline function iterate_children(alloc_data:AllocData,
-                                           sort_param:String, // TODO: Implement various sorting
-                                           f:AllocData->Int->Void,
-                                           depth:Int=0):Void
-          {
-            var children:Array<AllocData> = new Array<AllocData>();
-            for (child in alloc_data.children) children.push(child);
-            children.sort(function(a:AllocData, b:AllocData):Int {
-              if (_alloc_sort_count) return a.total_num > b.total_num ? -1 : (a.total_num < b.total_num ? 1 : 0);
-              return a.total_size > b.total_size ? -1 : (a.total_size < b.total_size ? 1 : 0);
-            });
-            for (child in children) {
-              f(child, depth);
+          function merge_children(tgt:AllocData, src:AllocData) {
+            tgt.total_size += src.total_size;
+            tgt.total_num += src.total_num;
+            tgt.callstack_id = src.callstack_id;
+            total_size += src.total_size;
+            total_num += src.total_num;
+            for (key in src.children.keys()) {
+              if (!tgt.children.exists(key)) tgt.children.set(key, new AllocData());
+              merge_children(tgt.children.get(key), src.children.get(key));
             }
           }
-
-          function draw_alloc_data(d:AllocData, depth:Int=0):Void
-          {
-            var stack = Util.make_label(session.stack_strings[d.callstack_id], 12, 0x66aadd);
-            var cont = new Sprite();
-            cont.addChild(stack);
-            cont.x = 15+15*(depth+1);
-            cont.y = y;
-            alloc_pane.cont.addChild(cont);
-   
-            if (d.children.keys().hasNext()) Util.add_collapse_button(cont, stack, false, alloc_pane.invalidate_scrollbars);
-   
-            draw_pct(cont, d.total_num, total_num, alloc_pane.innerWidth-120-cont.x+15);
-            draw_pct(cont, Math.round(d.total_size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10-cont.x+15);
-
-            y += stack.height;
-
-            iterate_children(d, "total_num", draw_alloc_data, depth+1);
-          }
-
-          iterate_children(ad, "total_num", draw_alloc_data);
-          //ping = !ping;
-          //if (ping) {
-          //  alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
-          //  alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,stack.height);
-          //}
+          merge_children(ad, frame_allocs.get(type));
         }
       }
-    } // if (alloc_pane.visible)
+    });
+
+    cast(alloc_pane.data_source, AllocsTabularDataSource).update_alloc_data(allocs, session);
+    alloc_pane.redraw();
+
+      // //trace(allocs);
+      // var y:Float = 0;
+      // var ping = true;
+      //  
+      // var keys = allocs.keys();
+      // var sorted:Array<Int> = new Array<Int>();
+      // for (key in keys) sorted.push(key);
+      // sorted.sort(function(i0:Int, i1:Int):Int {
+      //   var ad0 = allocs.get(i0);
+      //   var ad1 = allocs.get(i1);
+      //   if (_alloc_sort_count) return ad0.total_num > ad1.total_num ? -1 : (ad0.total_num < ad1.total_num ? 1 : 0);
+      //   return ad0.total_size > ad1.total_size ? -1 : (ad0.total_size < ad1.total_size ? 1 : 0);
+      // });
+      //  
+      // for (type_int in sorted) {
+      //   var ad = allocs.get(type_int);
+      //   var type = session.stack_strings[type_int];
+      //  
+      //   // type name formatting
+      //   if (type.substr(0,7)=='[object') type = type.substr(8, type.length-9);
+      //   if (type.substr(0,6)=='[class') type = type.substr(7, type.length-8);
+      //   type = (~/\$$/).replace(type, ' <static>');
+      //   var clo = type.indexOf('::');
+      //   if (clo>=0) {
+      //     type = 'Closure ['+type.substr(clo+2)+' ('+type.substr(0,clo)+')]';
+      //   }
+      //  
+      //   var lbl = Util.make_label(type, 12, 0x227788);
+      //   var cont = new Sprite();
+      //   cont.y = y;
+      //   cont.x = 15;
+      //   cont.addChild(lbl);
+      //   alloc_pane.cont.addChild(cont);
+      //  
+      //   inline function draw_pct(cont, val:Int, total:Int, offset:Float) {
+      //     var unit:Int = Math.floor(val*100/total);
+      //  
+      //     var num = Util.make_label((val==0)?"< 1" : Util.add_commas(val), 12, 0xeeeeee);
+      //     num.x = offset - 70 - num.width;
+      //     cont.addChild(num);
+      //  
+      //     var numpctunit = Util.make_label(unit+" %", 12, 0xeeeeee);
+      //     numpctunit.x = offset - 25 - numpctunit.width;
+      //     cont.addChild(numpctunit);
+      //   }
+      //   draw_pct(cont, ad.total_num, total_num, alloc_pane.innerWidth-120);
+      //   draw_pct(cont, Math.round(ad.total_size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10);
+      //  
+      //   // TODO: background graphics on special shape
+      //   //ping = !ping;
+      //   //if (ping) {
+      //   //  alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
+      //   //  alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,lbl.height);
+      //   //}
+      //  
+      //   y += lbl.height;
+      //  
+      //   // merged stacks (bottom-up objects)
+      //   if (ad.children.keys().hasNext()) {
+      //     Util.add_collapse_button(cont, lbl, false, alloc_pane.invalidate_scrollbars);
+      //  
+      //     inline function iterate_children(alloc_data:AllocData,
+      //                                      sort_param:String, // TODO: Implement various sorting
+      //                                      f:AllocData->Int->Void,
+      //                                      depth:Int=0):Void
+      //     {
+      //       var children:Array<AllocData> = new Array<AllocData>();
+      //       for (child in alloc_data.children) children.push(child);
+      //       children.sort(function(a:AllocData, b:AllocData):Int {
+      //         if (_alloc_sort_count) return a.total_num > b.total_num ? -1 : (a.total_num < b.total_num ? 1 : 0);
+      //         return a.total_size > b.total_size ? -1 : (a.total_size < b.total_size ? 1 : 0);
+      //       });
+      //       for (child in children) {
+      //         f(child, depth);
+      //       }
+      //     }
+      //  
+      //     function draw_alloc_data(d:AllocData, depth:Int=0):Void
+      //     {
+      //       var stack = Util.make_label(session.stack_strings[d.callstack_id], 12, 0x66aadd);
+      //       var cont = new Sprite();
+      //       cont.addChild(stack);
+      //       cont.x = 15+15*(depth+1);
+      //       cont.y = y;
+      //       alloc_pane.cont.addChild(cont);
+      //  
+      //       if (d.children.keys().hasNext()) Util.add_collapse_button(cont, stack, false, alloc_pane.invalidate_scrollbars);
+      //  
+      //       draw_pct(cont, d.total_num, total_num, alloc_pane.innerWidth-120-cont.x+15);
+      //       draw_pct(cont, Math.round(d.total_size/1024), Math.round(total_size/1024), alloc_pane.innerWidth-10-cont.x+15);
+      //  
+      //       y += stack.height;
+      //  
+      //       iterate_children(d, "total_num", draw_alloc_data, depth+1);
+      //     }
+      //  
+      //     iterate_children(ad, "total_num", draw_alloc_data);
+      //     //ping = !ping;
+      //     //if (ping) {
+      //     //  alloc_pane.cont.graphics.beginFill(0xffffff, 0.02);
+      //     //  alloc_pane.cont.graphics.drawRect(0,y,sample_pane.innerWidth,stack.height);
+      //     //}
+      //   }
+      // }
 
   }
 }
@@ -1700,7 +1755,7 @@ class SelectionController {
 class DetailUI {
   private var detail_pane:Pane;
   private var sample_pane:Pane;
-  private var alloc_pane:Pane;
+  private var alloc_pane:TabularDataPane;
   private var sel_ctrl:SelectionController;
   private var get_detail_factor:Void->Float;
 
@@ -1787,7 +1842,7 @@ class DetailUI {
     pcont.transform.colorTransform = tgt==pcont ? highlight_on : highlight_off;
     acont.transform.colorTransform = tgt==acont ? highlight_on : highlight_off;
     sample_pane.visible = true; //tgt==pcont;
-    alloc_pane.visible = tgt==acont;
+    alloc_pane.visible = true; //tgt==acont;
     plbl.visible = tgt==pcont;
     albl.visible = tgt==acont;
 

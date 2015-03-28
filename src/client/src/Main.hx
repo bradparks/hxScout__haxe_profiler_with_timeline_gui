@@ -403,7 +403,7 @@ class AllocsTabularDataSource extends AbsTabularDataSource
 
   override public function get_row_value(row_idx:Int, col_idx:Int):Float
   {
-    return col_idx==0 ? _rows[row_idx].total_num : _rows[row_idx].total_size;
+    return col_idx==0 ? _rows[row_idx].total_num : (_rows[row_idx].total_size/1024);
   }
 
   override public function get_row_name(row_idx:Int):String
@@ -455,7 +455,7 @@ class DeallocsTabularDataSource extends AbsTabularDataSource
 
   override public function get_row_value(row_idx:Int, col_idx:Int):Float
   {
-    return col_idx==0 ? _rows[row_idx].total : _rows[row_idx].size;
+    return col_idx==0 ? _rows[row_idx].total : (_rows[row_idx].size/1024);
   }
 
   override public function get_row_name(row_idx:Int):String
@@ -1345,8 +1345,6 @@ class SelectionController {
 
     if (!invalid) return;
 
-    //while (alloc_pane.cont.numChildren>0) alloc_pane.cont.removeChildAt(0);
-    //alloc_pane.cont.graphics.clear();
     while (summary_pane.cont.numChildren>0) summary_pane.cont.removeChildAt(0);
     summary_pane.cont.graphics.clear();
 

@@ -59,7 +59,7 @@ class FLMListener {
     if (output_port>0) {
       trace("Will send bkg telemetry on port "+output_port);
       var cfg = new hxtelemetry.HxTelemetry.Config();
-      cfg.allocations = true;
+      //cfg.allocations = false;
       cfg.port = output_port;
       cfg.app_name = "HxScout-FLMListener-"+inst_id;
       cfg.singleton_instance = false;

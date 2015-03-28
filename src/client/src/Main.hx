@@ -652,7 +652,6 @@ class HXScoutClientGUI extends Sprite
 
   private var nav_ctrl:NavController;
   private var sel_ctrl:SelectionController;
-  private var detail_ui:DetailUI;
 
   public var samples_data_source:SamplesTabularDataSource;
   public var allocs_data_source:AllocsTabularDataSource;
@@ -671,7 +670,6 @@ class HXScoutClientGUI extends Sprite
 
     samples_data_source = new SamplesTabularDataSource();
     sample_pane = new TabularDataPane(samples_data_source);
-    //sample_pane = new TabularDataPane(new ExampleTabularDataSource());
     sample_pane.outline = 0;
     sample_pane.outline_alpha = 0.75;
     sample_pane.name = "Profiler";
@@ -703,7 +701,6 @@ class HXScoutClientGUI extends Sprite
 
     sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, dealloc_pane, summary_pane, layout, get_active_session);
     nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane, sel_ctrl, layout, get_active_session, function() { return layout.frame_width/nav_scalex; }, function() { var tmp = active_session; set_active_session(-1); set_active_session(tmp); });
-    detail_ui = new DetailUI(detail_pane, sample_pane, alloc_pane, sel_ctrl);
 
     addEventListener(Event.ENTER_FRAME, on_enter_frame);
   }
@@ -746,10 +743,9 @@ class HXScoutClientGUI extends Sprite
     //resize_pane(0, 0, alloc_pane,  0, 20, detail_pane.innerWidth, detail_pane.innerHeight-20);
 
     if (stage!=null) {
-      sel_ctrl.redraw();
+      sel_ctrl.redraw_selection();
       //nav_ctrl.redraw();
     }
-    detail_ui.resize();
   }
 
   inline function resize_pane(stage_w:Float, stage_h:Float, pane:Sprite, x:Float, y:Float, w:Float, h:Float)
@@ -898,6 +894,9 @@ class HXScoutClientGUI extends Sprite
   private function on_enter_frame(e:Event)
   {
     if (active_session<0) return;
+
+    //var t0 = flash.Lib.getTimer();
+
     var i=0;
     var session:FLMSession = sessions[active_session];
     for (i in (last_frame_drawn+1)...session.frames.length) {
@@ -976,6 +975,8 @@ class HXScoutClientGUI extends Sprite
       nav_scalex *= rescale;
       //nav_ctrl.redraw();
     }
+
+    //trace(" -- oef: "+(flash.Lib.getTimer()-t0));
   }
 
   private var stack_y:Float = 0;
@@ -1807,113 +1808,4 @@ class SelectionController {
       // }
 
   }
-}
-
-class DetailUI {
-  private var detail_pane:Pane;
-  private var sample_pane:Pane;
-  private var alloc_pane:TabularDataPane;
-  private var sel_ctrl:SelectionController;
-  private var get_detail_factor:Void->Float;
-
-  private var pcont:Sprite;
-  private var acont:Sprite;
-  private var plbl:Sprite;
-  private var albl:Sprite;
-
-  public function new (detail_pane, sample_pane, alloc_pane, sel_ctrl):Void
-  {
-    this.detail_pane = detail_pane;
-    this.sample_pane = sample_pane;
-    this.alloc_pane = alloc_pane;
-    this.sel_ctrl = sel_ctrl;
-
-    var profiler = Util.make_label("Profiler", 12);
-    profiler.filters = [Util.TEXT_SHADOW];
-    profiler.mouseEnabled = false;
-    var p = pcont = new Sprite();
-    Util.begin_gradient(p.graphics, profiler.width*1.4, profiler.height);
-    p.graphics.lineStyle(1, 0x555555);
-    p.graphics.drawRect(0,0,profiler.width*1.4, profiler.height);
-    profiler.x = profiler.width*0.2;
-    p.addChild(profiler);
-    //detail_pane.cont.addChild(p);
-
-    var alloc = Util.make_label("Memory", 12);
-    alloc.filters = [Util.TEXT_SHADOW];
-    alloc.mouseEnabled = false;
-    var a = acont = new Sprite();
-    Util.begin_gradient(a.graphics, alloc.width*1.4, alloc.height);
-    a.graphics.lineStyle(1, 0x555555);
-    a.graphics.drawRect(0,0,alloc.width*1.4, alloc.height);
-    alloc.x = alloc.width*0.2;
-    a.addChild(alloc);
-    a.x = p.x+p.width+5;
-    //detail_pane.cont.addChild(a);
-
-    plbl = new Sprite();
-    var plbl_self = Util.make_label("Self Time (ms)", 12);
-    var plbl_total = Util.make_label("Total Time (ms)", 12);
-    plbl.addChild(plbl_self);
-    plbl.addChild(plbl_total);
-    plbl_total.x = 130;
-    //detail_pane.cont.addChild(plbl);
-    AEL.add(plbl_self, MouseEvent.CLICK, sel_ctrl.handle_sort_self);
-    AEL.add(plbl_total, MouseEvent.CLICK, sel_ctrl.handle_sort_total);
-
-    albl = new Sprite();
-    var albl_size = Util.make_label("Size (KB)", 12);
-    var albl_count = Util.make_label("Count", 12);
-    albl.addChild(albl_size);
-    albl.addChild(albl_count);
-    albl_size.x = 130;
-    //detail_pane.cont.addChild(albl);
-    AEL.add(albl_size, MouseEvent.CLICK, sel_ctrl.handle_sort_size);
-    AEL.add(albl_count, MouseEvent.CLICK, sel_ctrl.handle_sort_count);
-
-    function handle_tab_click(e:Event):Void { select(e.target); }
-    AEL.add(p, MouseEvent.CLICK, handle_tab_click);
-    AEL.add(a, MouseEvent.CLICK, handle_tab_click);
-    select(p);
-
-    AEL.add(Util.stage, KeyboardEvent.KEY_DOWN, handle_key);
-  }
-
-  function handle_key(ev:Event)
-  {
-    var e = cast(ev, KeyboardEvent);
-    if (e.keyCode==9) { // tab
-      select((alloc_pane.visible) ? pcont : acont);
-    }
-  }
-
-  // public var sel_index(get, set):Int;
-  // public function get_sel_index():Int { return sample_pane.visible ? 0 : 1; }
-  // public function set_sel_index(val:Int):Int { select(val==0 ? pcont : acont); return val; }
-
-  private function select(tgt:Sprite):Void
-  {
-    var highlight_on = new openfl.geom.ColorTransform(1,1.02,1.04,1,0,0,0);
-    var highlight_off = new openfl.geom.ColorTransform(0.5,0.5,0.5,1,10,10,10);
-
-    pcont.transform.colorTransform = tgt==pcont ? highlight_on : highlight_off;
-    acont.transform.colorTransform = tgt==acont ? highlight_on : highlight_off;
-    sample_pane.visible = true; //tgt==pcont;
-    alloc_pane.visible = true; //tgt==acont;
-    plbl.visible = tgt==pcont;
-    albl.visible = tgt==acont;
-
-    // openfl bug /w set colortransform / cached textfields?
-    pcont.getChildAt(0).alpha = 1;
-    acont.getChildAt(0).alpha = 1;
-
-    sel_ctrl.redraw();
-  }
-
-  public function resize():Void
-  {
-    plbl.x = detail_pane.innerWidth - plbl.width - 30;
-    albl.x = detail_pane.innerWidth - albl.width - 30;
-  }
-
 }

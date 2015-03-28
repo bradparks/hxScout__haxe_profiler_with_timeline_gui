@@ -283,7 +283,7 @@ class TabbedPane extends Pane
     _selected_tab = idx;
 
     var highlight_on = new openfl.geom.ColorTransform(1,1.02,1.04,1,0,0,0);
-    var highlight_off = new openfl.geom.ColorTransform(0.5,0.5,0.5,1,10,10,10);
+    var highlight_off = new openfl.geom.ColorTransform(0.75,0.75,0.75,1,10,10,10);
 
     for (i in 0...tab_cont.numChildren) {
       tab_cont.getChildAt(i).transform.colorTransform = i==idx ? highlight_on : highlight_off;
@@ -786,7 +786,6 @@ class TabularDataPane extends Pane
       var later:TabularRowSprite = (sorted_idx==_sorted_rows.length-1) ? null : _row_sprites[_sorted_rows[sorted_idx+1]];
 
       var needs_hidden = later==null || (later.visible && later.parent!=null);
-      trace("needs_hidden = "+needs_hidden);
       Actuate.tween(btn, 0.2, { rotation: needs_hidden ? -90 : 0 });
       if (needs_hidden) do_hide();
       else do_show(cast(e).shiftKey);

@@ -464,6 +464,72 @@ class DeallocsTabularDataSource extends AbsTabularDataSource
   }
 }
 
+class TracesTabularDataSource extends AbsTabularDataSource
+{
+  private var _session:FLMSession;
+
+  public function new() {
+    super();
+  }
+
+  private var _num_per_frame:Array<Int>;
+  private var _start:Int;
+  private var _end:Int;
+  private var _num_rows:Int;
+  public function update_trace_data(session:FLMSession, start:Int, end:Int):Void
+  {
+    _session = session;
+    _start = start;
+    _end = end;
+    _num_rows = 0;
+
+    _num_per_frame = [];
+    for (idx in start...end+1) {
+      var f:FLMListener.Frame = _session.frames[idx-1];
+      var val:Int = f.traces!=null ? f.traces.length : 0;
+      _num_rows += val;
+      _num_per_frame.push(val);
+    }
+  }
+
+  private static var labels:Array<String> = [];
+  override public function get_labels():Array<String> { return labels; }
+
+  override public function get_num_rows():Int
+  {
+    return _num_rows;
+  }
+
+  override public function get_num_cols():Int { return 0; }
+
+  override public function get_indent(row_idx:Int):Int
+  {
+    return 0;
+  }
+
+  override public function get_row_value(row_idx:Int, col_idx:Int):Float
+  {
+    return 0.0;
+  }
+
+  override public function get_row_name(row_idx:Int):String
+  {
+    //trace("Requesting row_idx: "+row_idx+" of "+_num_rows+" in frames "+_start+" to "+_end);
+    var fidx:Int = 0;
+    while (row_idx >= _num_per_frame[fidx]) {
+      //trace("Ignoring frame "+fidx+" with "+_num_per_frame[fidx]);
+      row_idx -= _num_per_frame[fidx++];
+      //trace("  - row_idx now: "+row_idx);
+    }
+    //trace("LANDED at "+fidx+" with "+_num_per_frame[fidx]);
+    //trace("  - row_idx finally: "+row_idx+", with fidx: "+fidx+" plus start="+_start+" of "+_session.frames.length);
+    //trace("frame is: "+_session.frames[_start+fidx-1]);
+    //trace("traces is: "+_session.frames[_start+fidx-1].traces);
+
+    return _session.frames[_start+fidx-1].traces[row_idx];
+  }
+}
+
 class FLMSession {
 
   public var frames:Array<FLMListener.Frame> = [];
@@ -613,7 +679,11 @@ class FLMSession {
     if (dels!=null) {
       for (del in dels) {
         // Convert ID to GUID, allocs guaranteed already seen
-        del.guid = alloc_id_to_guid.get(del.id);
+        if (alloc_id_to_guid.exists(del.id)) {
+          del.guid = alloc_id_to_guid.get(del.id);
+        } else {
+          trace("GUID missing for del="+del+", collection will be ignored!");
+        }
       }
     }
 
@@ -645,6 +715,7 @@ class HXScoutClientGUI extends Sprite
   private var sample_pane:TabularDataPane;
   private var alloc_pane:TabularDataPane;
   private var dealloc_pane:TabularDataPane;
+  private var trace_pane:TabularDataPane;
 
   private var active_session = -1;
   private var last_frame_drawn = -1;
@@ -656,6 +727,7 @@ class HXScoutClientGUI extends Sprite
   public var samples_data_source:SamplesTabularDataSource;
   public var allocs_data_source:AllocsTabularDataSource;
   public var deallocs_data_source:DeallocsTabularDataSource;
+  public var traces_data_source:TracesTabularDataSource;
 
   public function new()
   {
@@ -686,6 +758,12 @@ class HXScoutClientGUI extends Sprite
     dealloc_pane.outline_alpha = 0.75;
     dealloc_pane.name = "Collections";
 
+    traces_data_source = new TracesTabularDataSource();
+    trace_pane = new TabularDataPane(traces_data_source);
+    trace_pane.outline = 0;
+    trace_pane.outline_alpha = 0.75;
+    trace_pane.name = "Trace";
+
     addChild(session_pane);
     addChild(nav_pane);
     addChild(summary_pane);
@@ -697,9 +775,10 @@ class HXScoutClientGUI extends Sprite
     detail_pane.add_pane(sample_pane);
     detail_pane.add_pane(alloc_pane);
     detail_pane.add_pane(dealloc_pane);
+    detail_pane.add_pane(trace_pane);
     detail_pane.select_tab(0);
 
-    sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, dealloc_pane, summary_pane, layout, get_active_session);
+    sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, dealloc_pane, trace_pane, summary_pane, layout, get_active_session);
     nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane, sel_ctrl, layout, get_active_session, function() { return layout.frame_width/nav_scalex; }, function() { var tmp = active_session; set_active_session(-1); set_active_session(tmp); });
 
     addEventListener(Event.ENTER_FRAME, on_enter_frame);
@@ -1172,6 +1251,7 @@ class SelectionController {
   private var sample_pane:TabularDataPane;
   private var alloc_pane:TabularDataPane;
   private var dealloc_pane:TabularDataPane;
+  private var trace_pane:TabularDataPane;
   private var summary_pane:Pane;
   private var layout:Dynamic;
   private var get_active_session:Void->FLMSession;
@@ -1182,7 +1262,7 @@ class SelectionController {
   public var start_sel:Int;
   public var end_sel:Int;
 
-  public function new (nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, dealloc_pane, summary_pane, layout,
+  public function new (nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, dealloc_pane, trace_pane, summary_pane, layout,
                        get_active_session):Void
   {
     this.nav_pane = nav_pane;
@@ -1191,6 +1271,7 @@ class SelectionController {
     this.sample_pane = sample_pane;
     this.alloc_pane = alloc_pane;
     this.dealloc_pane = dealloc_pane;
+    this.trace_pane = trace_pane;
     this.summary_pane = summary_pane;
     this.layout = layout;
     this.get_active_session = get_active_session;
@@ -1324,8 +1405,8 @@ class SelectionController {
     if (start<1) start=1;
     if (end>session.frames.length) end = session.frames.length;
 
-    var frame:Dynamic = session.frames[start-1];
-    var end_frame:Dynamic = session.frames[end-1];
+    var frame:FLMListener.Frame = session.frames[start-1];
+    var end_frame:FLMListener.Frame = session.frames[end-1];
     if (frame==null || end_frame==null) return;
 
     var num_frames:Int = end-start+1;
@@ -1343,8 +1424,11 @@ class SelectionController {
     // Update summary, samples, etc
     //trace(frame);
 
-    if (!invalid) return;
+    if (invalid) redraw_panes(session, start, end, frame, end_frame, num_frames);
+  }
 
+  private function redraw_panes(session:FLMSession, start:Int, end:Int, frame:FLMListener.Frame, end_frame:FLMListener.Frame, num_frames:Int):Void
+  {
     while (summary_pane.cont.numChildren>0) summary_pane.cont.removeChildAt(0);
     summary_pane.cont.graphics.clear();
 
@@ -1610,8 +1694,13 @@ class SelectionController {
     var total_size:Int = 0;
     each_frame(function(f:FLMListener.Frame) {
       for (i in 0...f.mem_dealloc.length) {
-        var d = f.mem_dealloc[i];
+        var d:FLMListener.DelAlloc = f.mem_dealloc[i];
+        if (d.guid==0) d.guid = session.alloc_id_to_guid.get(d.id); // Attempt repair
         var item:FLMListener.NewAlloc = session.alloc_guid_to_newalloc.get(d.guid);
+        if (item==null) {
+          trace("Unexpected null NewAlloc for guid: "+d.guid+", d="+d+", re-lookup="+session.alloc_id_to_guid.get(d.id));
+          continue;
+        }
         var type:Int = item.type;
         if (!deallocs.exists(type)) {
           deallocs.set(type, {total:0,size:0});
@@ -1627,6 +1716,11 @@ class SelectionController {
     cast(dealloc_pane.data_source, DeallocsTabularDataSource).update_dealloc_data(deallocs, session);
     dealloc_pane.redraw();
 
+    each_frame(function(f:FLMListener.Frame) {
+    });
+
+    cast(trace_pane.data_source, TracesTabularDataSource).update_trace_data(session, start, end);
+    trace_pane.redraw();
 
     //  if (total>0) {
     //    y = 0;

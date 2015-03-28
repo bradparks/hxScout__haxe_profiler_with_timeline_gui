@@ -155,7 +155,12 @@ class FLMListener {
 				if (name=='.swf.name') {
 					send_message({session_name:data['value'], inst_id:inst_id, amf_mode:amf_mode});
 				}
-	 
+
+				if (name=='.trace') {
+          if (cur_frame.traces==null) cur_frame.traces = [];
+          cur_frame.traces.push(data['value']);
+        }
+
 				// - - - - - - - - - - - -
 				// Timing / Span / Delta
 				// - - - - - - - - - - - -
@@ -431,6 +436,8 @@ class Frame {
   public var prof_top_down:Dynamic;
   public var alloc_bottom_up:Dynamic;
 
+  public var traces:Array<String>;
+
 #if DEBUG_UNKNOWN
   public var unknown_names:Array<String>;
 #end
@@ -453,6 +460,7 @@ class Frame {
     samples = null;
     push_stack_strings = null;
     push_stack_maps = null;
+    traces = null;
     cpu = 0;
     // TODO: conditional allocation based on enabled metrics
     samples = new Array<SampleRaw>();

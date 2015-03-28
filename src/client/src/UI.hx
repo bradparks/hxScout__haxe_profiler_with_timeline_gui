@@ -303,7 +303,6 @@ class TabbedPane extends Pane
     for (i in 0...cont.numChildren) {
       var p:DisplayObject = cont.getChildAt(i);
       if (Std.is(p, Pane)) {
-        trace("Tabbed pane resizing child: "+p+" to "+_width+"x"+height+", minus padding/tab");
         p.width = _width - 2*PAD;
         p.height = _height - TAB_HEIGHT;
         p.x = 0;

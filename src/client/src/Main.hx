@@ -1068,7 +1068,7 @@ class HXScoutClientGUI extends Sprite
 
     var idx:Int = Math.floor(id/16);
     var arr = (pane==timing_pane) ? timing_shapes : memory_shapes;
-    while (arr.length<=idx) arr.push(new Shape());
+    while (arr.length<=idx) arr.push(new openfl._v2.display.ShapeNoEvents());
     var s:Shape = arr[idx];
 
     s.scaleY = pane==timing_pane ? nav_ctrl.timing_scaley : nav_ctrl.memory_scaley;

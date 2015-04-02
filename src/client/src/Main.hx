@@ -759,7 +759,9 @@ class HXScoutClientGUI extends Sprite
     dealloc_pane.name = "Collections";
 
     traces_data_source = new TracesTabularDataSource();
-    trace_pane = new TabularDataPane(traces_data_source);
+    trace_pane = new TabularDataPane(traces_data_source,
+                                     { font:"FreeMono.ttf", color:0xcccccc,
+                                       preindent:0, row_height:16 });
     trace_pane.outline = 0;
     trace_pane.outline_alpha = 0.75;
     trace_pane.name = "Trace";
@@ -1472,8 +1474,8 @@ class SelectionController {
     lbl.x = 10;
     summary_pane.cont.addChild(lbl);
 
-    var unit:Int = Math.floor(num_frames*1000000/total);
-    var dec:Int = Math.floor(num_frames*10000000/total)-10*unit;
+    var unit:Int = Math.floor(num_frames*1000000.0/total);
+    var dec:Int = Math.floor(num_frames*10000000.0/total)-10*unit;
 
     var fps = Util.make_label((unit+"."+dec+" fps"), 18, 0xeeeeee);
     fps.y = lbl.y + 18 - 4;

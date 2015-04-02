@@ -429,16 +429,26 @@ class ToggleButton extends Sprite
 class TabularDataPane extends Pane
 {
   private static var LABEL_HEIGHT:Float = 20;
-  private static var ROW_HEIGHT:Float = 20;
   private static var INDENT_X:Float = 20;
 
   private var _label_cont:Sprite;
   private var _toggle_all_btn:ToggleButton;
   private var _row_cont:Pane;
   private var _data_source:AbsTabularDataSource;
+  private var _style:Dynamic;
 
-  public function new(data_source:AbsTabularDataSource):Void
+  private static var DEFAULT_STYLE = {
+    font:"DroidSans.ttf",
+    color:0x66aadd,
+    row_height:20,
+    preindent:20
+  };
+
+  public function new(data_source:AbsTabularDataSource,
+                      style:Dynamic=null):Void
   {
+    _style = style==null ? DEFAULT_STYLE : style;
+
     _label_cont = new Sprite();
     _row_cont = new Pane(false, false, true); // scrolly
     _row_cont.outline = 0;
@@ -552,14 +562,14 @@ class TabularDataPane extends Pane
     for (sorted_idx in 0...n) {
       var row_idx = _sorted_rows[sorted_idx];
       var row_sprite:TabularRowSprite = _row_sprites[row_idx];
-      dy += row_sprite.visible ? 0 : ROW_HEIGHT;
-      row_sprite.y = sorted_idx*ROW_HEIGHT-dy;
+      dy += row_sprite.visible ? 0 : _style.row_height;
+      row_sprite.y = sorted_idx*_style.row_height-dy;
       row_sprite.x = 0;
 
       //var r:flash.geom.Rectangle = _row_cont.cont.scrollRect;
       //if (sorted_idx==0 ||
       //    sorted_idx==n-1 ||
-      //    (row_sprite.y > r.y - ROW_HEIGHT &&
+      //    (row_sprite.y > r.y - _style.row_height &&
       //     row_sprite.y < r.y + r.height)) {
       //  _row_cont.cont.addChild(row_sprite);
       //} else if (row_sprite.parent!=null) {
@@ -567,7 +577,7 @@ class TabularDataPane extends Pane
       //}
 
       var indent = _data_source.get_indent(row_idx);
-      row_sprite.getChildAt(0).x = INDENT_X + INDENT_X * indent;
+      row_sprite.getChildAt(0).x = _style.preindent + INDENT_X * indent;
 
       var num_cols = _data_source.get_num_cols();
       for (i in 0...num_cols) {
@@ -606,7 +616,7 @@ class TabularDataPane extends Pane
       row_idx = _sorted_rows[_first_row];
       row_sprite = _row_sprites[row_idx];
     }
-    while (row_sprite.y >= r.y-ROW_HEIGHT && _first_row>0) {
+    while (row_sprite.y >= r.y-_style.row_height && _first_row>0) {
       _first_row = _first_row - 1;
       row_idx = _sorted_rows[_first_row];
       row_sprite = _row_sprites[row_idx];
@@ -692,11 +702,11 @@ class TabularDataPane extends Pane
     // read from data source, draw rows, collapsable, setup linked list
     for (row_idx in 0..._data_source.get_num_rows()) {
       var row_sprite:TabularRowSprite = new TabularRowSprite(); // TODO: pool
-      //row_sprite.y = ROW_HEIGHT*row_idx;
+      //row_sprite.y = _style.row_height*row_idx;
       //_row_cont.cont.addChild(row_sprite);
       _row_sprites.push(row_sprite);
 
-      var text = Util.make_label(_data_source.get_row_name(row_idx), 12, 0x66aadd);
+      var text = Util.make_label(_data_source.get_row_name(row_idx), 12, _style.color, -1, _style.font);
       row_sprite.label = text;
       row_sprite.addChild(text);
       row_sprite.row_idx = row_idx;
@@ -731,14 +741,14 @@ class TabularDataPane extends Pane
   {
     var btn:Sprite = new Sprite();
     btn.graphics.beginFill(0xeeeeee, 0.01);
-    btn.graphics.drawCircle(0, 0, ROW_HEIGHT/3);
-    btn.x = row_sprite.label.x - ROW_HEIGHT/3;
-    btn.y = ROW_HEIGHT/2;
+    btn.graphics.drawCircle(0, 0, _style.row_height/3);
+    btn.x = row_sprite.label.x - _style.row_height/3;
+    btn.y = _style.row_height/2;
     btn.graphics.lineStyle(1,0xeeeeee,0.7);
     btn.graphics.beginFill(0xeeeeee, 0.3);
-    btn.graphics.moveTo(-ROW_HEIGHT/5, -ROW_HEIGHT/5);
-    btn.graphics.lineTo( ROW_HEIGHT/5, -ROW_HEIGHT/5);
-    btn.graphics.lineTo(          0,  ROW_HEIGHT/6);
+    btn.graphics.moveTo(-_style.row_height/5, -_style.row_height/5);
+    btn.graphics.lineTo( _style.row_height/5, -_style.row_height/5);
+    btn.graphics.lineTo(                   0,  _style.row_height/6);
     row_sprite.addChild(btn);
     btn.name = "collapse_btn";
 

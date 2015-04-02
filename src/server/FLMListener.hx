@@ -508,6 +508,14 @@ abstract Object<T>(Dynamic<T>) from Dynamic<T> {
       return data;
     }
 
+    @:from static public inline function fromDynamic(m:Dynamic) {
+      var data = new Object<Dynamic>();
+      for (key in Reflect.fields(m)) {
+        data[key] = Reflect.field(m, key);
+      }
+      return data;
+    }
+
     public inline function exists(key:String):Bool {
         return Reflect.hasField(this, key);
     }

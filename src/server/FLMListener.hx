@@ -27,6 +27,12 @@ typedef DelAlloc = { // aka struct
   var guid:Int;
 }
 
+typedef ReAlloc = { // aka struct
+  var old_id:Int;
+  var new_id:Int;
+  var new_size:Int;
+}
+
 typedef SampleRaw = { // aka struct
   var numticks:Int;
   var callstack:Array<Int>;
@@ -379,7 +385,18 @@ class FLMListener {
                 num -= 1;
               }
             }
-            case 15: { read_ints(flm_socket.input.readInt32()); } // reallocations, TBD
+            case 15: { // reallocations
+              var num:Int = flm_socket.input.readInt32();
+              while (num>0) {
+                var n:ReAlloc = {
+                  old_id:flm_socket.input.readInt32(),
+                  new_id:flm_socket.input.readInt32(),
+                  new_size:flm_socket.input.readInt32()
+                }
+                cur_frame.mem_realloc.push(n);
+                num -= 3;
+              }
+            }
           }
         }
       } catch( e:Dynamic) {
@@ -431,6 +448,7 @@ class Frame {
   //public var alloc:StringMap<Array<Dynamic>>;
   public var mem_alloc:Array<NewAlloc>;
   public var mem_dealloc:Array<DelAlloc>;
+  public var mem_realloc:Array<ReAlloc>;
   //public var events:Array<Dynamic>;
 
   public var prof_top_down:Dynamic;
@@ -466,6 +484,7 @@ class Frame {
     samples = new Array<SampleRaw>();
     mem_alloc = new Array<NewAlloc>();
     mem_dealloc = new Array<DelAlloc>();
+    mem_realloc = new Array<ReAlloc>();
 #if DEBUG_UNKNOWN
     unknown_names = [];
 #end

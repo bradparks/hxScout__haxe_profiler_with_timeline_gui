@@ -630,12 +630,50 @@ class FLMSession {
     //print_samples(frame_data.prof_bottom_up);
   }
 
+  private inline function tally_alloc(bottom_up:IntMap<AllocData>, item:FLMListener.NewAlloc, frame_id:Int):Void
+  {
+    if (!bottom_up.exists(item.type)) bottom_up.set(item.type, new AllocData());
+    var ad:AllocData = bottom_up.get(item.type);
+    ad.total_size += item.size;
+    ad.total_num++;
+
+    // Track with guid
+    if (!alloc_id_to_guid.exists(item.id)) {
+      item.guid = (alloc_guid++);
+      alloc_id_to_guid.set(item.id, item.guid);
+      alloc_guid_to_newalloc.set(item.guid, item);
+    } else {
+      trace("Hmm - shouldn't get another guid for object "+item+", frame_id="+frame_id);
+    }
+
+    //trace("collate allocation: "+item);
+
+    var id = item.stackid;
+    var callstack:Array<Int> = this.stack_maps[id];
+    if (callstack==null) {
+      if (this.stack_strings[item.type]!="[object Event]") trace("- warning: null callstack for "+this.stack_strings[item.type]+" on frame id="+frame_id+", stack map id "+id+" > length "+this.stack_maps.length);
+      return;
+    }
+    //trace(" - type "+item.type+", callstack="+callstack);
+
+    //trace("New "+item.type+"=="+stack_strings[item.type]+" from stackid="+id+", ["+callstack+"], "+stack_strings[callstack[0]]);
+
+    var ptr:AllocData = ad;
+    for (j in 0...callstack.length) {
+      ptr = ptr.ensure_child(callstack[j]);
+      ptr.total_size += item.size;
+      ptr.total_num++;
+      ptr.callstack_id = callstack[j];
+    }
+  }
+
   private function collate_alloc_data(frame_data:FLMListener.Frame):Void
   {
     //trace(haxe.Json.stringify(frame_data.alloc, null, "  "));
     var news:Array<FLMListener.NewAlloc> = frame_data.mem_alloc;
-    //var updates:Array<Dynamic> = frame_data.alloc.updateObject;
+    //var updates:Array<Dynamic> = frame_data.alloc.updateObject; // flm
     var dels:Array<FLMListener.DelAlloc> = frame_data.mem_dealloc;
+    var rels:Array<FLMListener.ReAlloc> = frame_data.mem_realloc; // hxt
 
     // Bottom-up objects by type
     var bottom_up = new IntMap<AllocData>();
@@ -643,35 +681,31 @@ class FLMSession {
     if (news!=null) {
       for (i in 0...news.length) {
         var item:FLMListener.NewAlloc = news[i];
-        if (!bottom_up.exists(item.type)) bottom_up.set(item.type, new AllocData());
-        var ad:AllocData = bottom_up.get(item.type);
-        ad.total_size += item.size;
-        ad.total_num++;
-        //trace("collate allocation: "+item);
+        trace("Got new "+item);
+        tally_alloc(bottom_up, item, frame_data.id);
+      }
+    }
 
-        // Track with guid
-        if (!alloc_id_to_guid.exists(item.id)) {
-          item.guid = (alloc_guid++);
-          alloc_id_to_guid.set(item.id, item.guid);
-          alloc_guid_to_newalloc.set(item.guid, item);
-        }
+    if (rels!=null) {
+      // Convert reloc to a new alloc
+      for (rel in rels) {
+        trace("Got rel "+rel);
+        if (alloc_id_to_guid.exists(rel.old_id)) {
+          var guid = alloc_id_to_guid.get(rel.old_id);
+          var item = alloc_guid_to_newalloc.get(guid);
 
-        var id = item.stackid;
-        var callstack:Array<Int> = this.stack_maps[id];
-        if (callstack==null) {
-          if (this.stack_strings[item.type]!="[object Event]") trace("- warning: null callstack for "+this.stack_strings[item.type]+" on frame id="+frame_data.id+", stack map id "+id+" > length "+this.stack_maps.length);
-          continue;
-        }
-        //trace(" - type "+item.type+", callstack="+callstack);
+          var n:FLMListener.NewAlloc = {
+            id:rel.new_id,
+            type:item.type,
+            stackid:item.stackid,
+            size:rel.new_size,
+            guid:0
+          }
 
-        //trace("New "+item.type+"=="+stack_strings[item.type]+" from stackid="+id+", ["+callstack+"], "+stack_strings[callstack[0]]);
+          tally_alloc(bottom_up, n, frame_data.id);
 
-        var ptr:AllocData = ad;
-        for (j in 0...callstack.length) {
-          ptr = ptr.ensure_child(callstack[j]);
-          ptr.total_size += item.size;
-          ptr.total_num++;
-          ptr.callstack_id = callstack[j];
+        } else {
+          trace("GUID missing for rel="+rel+", relocation will be ignored!");
         }
       }
     }
@@ -679,8 +713,10 @@ class FLMSession {
     if (dels!=null) {
       for (del in dels) {
         // Convert ID to GUID, allocs guaranteed already seen
+        trace("Got del "+del+", frame="+frame_data.id);
         if (alloc_id_to_guid.exists(del.id)) {
           del.guid = alloc_id_to_guid.get(del.id);
+          alloc_id_to_guid.remove(del.id);
         } else {
           trace("GUID missing for del="+del+", collection will be ignored!");
         }
@@ -1109,6 +1145,9 @@ class NavController {
     AEL.add(nav_pane, MouseEvent.MOUSE_DOWN, handle_nav_start);
     AEL.add(nav_pane, Event.ENTER_FRAME, redraw);
     AEL.add(Util.stage, KeyboardEvent.KEY_DOWN, handle_key);
+
+    timing_pane.mouseChildren = false;
+    memory_pane.mouseChildren = false;
 
     AEL.add(timing_pane, MouseEvent.MOUSE_WHEEL, handle_zoom);
     AEL.add(memory_pane, MouseEvent.MOUSE_WHEEL, handle_zoom);
@@ -1697,7 +1736,7 @@ class SelectionController {
     each_frame(function(f:FLMListener.Frame) {
       for (i in 0...f.mem_dealloc.length) {
         var d:FLMListener.DelAlloc = f.mem_dealloc[i];
-        if (d.guid==0) d.guid = session.alloc_id_to_guid.get(d.id); // Attempt repair
+        //if (d.guid==0) d.guid = session.alloc_id_to_guid.get(d.id); // Attempt repair
         var item:FLMListener.NewAlloc = session.alloc_guid_to_newalloc.get(d.guid);
         if (item==null) {
           trace("Unexpected null NewAlloc for guid: "+d.guid+", d="+d+", re-lookup="+session.alloc_id_to_guid.get(d.id));

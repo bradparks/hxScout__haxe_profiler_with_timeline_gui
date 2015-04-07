@@ -678,50 +678,95 @@ class FLMSession {
     // Bottom-up objects by type
     var bottom_up = new IntMap<AllocData>();
     frame_data.alloc_bottom_up = bottom_up;
-    if (news!=null) {
-      for (i in 0...news.length) {
-        var item:FLMListener.NewAlloc = news[i];
-        trace("Got new "+item);
-        tally_alloc(bottom_up, item, frame_data.id);
-      }
-    }
-
-    if (rels!=null) {
-      // Convert reloc to a new alloc
-      for (rel in rels) {
-        trace("Got rel "+rel);
-        if (alloc_id_to_guid.exists(rel.old_id)) {
-          var guid = alloc_id_to_guid.get(rel.old_id);
-          var item = alloc_guid_to_newalloc.get(guid);
-
-          var n:FLMListener.NewAlloc = {
-            id:rel.new_id,
-            type:item.type,
-            stackid:item.stackid,
-            size:rel.new_size,
-            guid:0
+    var op:Int;
+    var idx_alloc:Int = 0;
+    var idx_dealloc:Int = 0;
+    var idx_realloc:Int = 0;
+    for (op in frame_data.alloc_ops) {
+      switch (op) {
+        case 0: { // allocation
+          var item:FLMListener.NewAlloc = news[idx_alloc++];
+          //trace("Got new "+item+", id="+StringTools.hex(item.id, 16).toLowerCase());
+          tally_alloc(bottom_up, item, frame_data.id);
+        }
+        case 1: { // collection
+          var del:FLMListener.DelAlloc = dels[idx_dealloc++];
+          if (alloc_id_to_guid.exists(del.id)) {
+            del.guid = alloc_id_to_guid.get(del.id);
+            alloc_id_to_guid.remove(del.id);
+          } else {
+            trace("GUID missing for del="+del+", id="+StringTools.hex(del.id, 16).toLowerCase()+", collection will be ignored!");
           }
-
-          tally_alloc(bottom_up, n, frame_data.id);
-
-        } else {
-          trace("GUID missing for rel="+rel+", relocation will be ignored!");
         }
+        case 2: {
+          var rel:FLMListener.ReAlloc = rels[idx_realloc++];
+          //trace("Got rel "+rel+", old_is="+StringTools.hex(rel.old_id, 16).toLowerCase()+", new_id="+StringTools.hex(rel.new_id, 16).toLowerCase());
+          if (alloc_id_to_guid.exists(rel.old_id)) {
+            var guid = alloc_id_to_guid.get(rel.old_id);
+            var old_item = alloc_guid_to_newalloc.get(guid);
+       
+            var item:FLMListener.NewAlloc = {
+              id:rel.new_id,
+              type:old_item.type,
+              stackid:old_item.stackid,
+              size:rel.new_size,
+              guid:0
+            }
+       
+            tally_alloc(bottom_up, item, frame_data.id);
+
+          } else {
+            trace("GUID missing for rel="+rel+", relocation will be ignored!");
+          }
+        }
+        // TODO: case 2: // reallocation
       }
     }
 
-    if (dels!=null) {
-      for (del in dels) {
-        // Convert ID to GUID, allocs guaranteed already seen
-        trace("Got del "+del+", frame="+frame_data.id);
-        if (alloc_id_to_guid.exists(del.id)) {
-          del.guid = alloc_id_to_guid.get(del.id);
-          alloc_id_to_guid.remove(del.id);
-        } else {
-          trace("GUID missing for del="+del+", collection will be ignored!");
-        }
-      }
-    }
+    //if (news!=null) {
+    //  for (i in 0...news.length) {
+    //    var item:FLMListener.NewAlloc = news[i];
+    //    trace("Got new "+item);
+    //    tally_alloc(bottom_up, item, frame_data.id);
+    //  }
+    //}
+    // 
+    //if (rels!=null) {
+    //  // Convert reloc to a new alloc
+    //  for (rel in rels) {
+    //    trace("Got rel "+rel);
+    //    if (alloc_id_to_guid.exists(rel.old_id)) {
+    //      var guid = alloc_id_to_guid.get(rel.old_id);
+    //      var item = alloc_guid_to_newalloc.get(guid);
+    // 
+    //      var n:FLMListener.NewAlloc = {
+    //        id:rel.new_id,
+    //        type:item.type,
+    //        stackid:item.stackid,
+    //        size:rel.new_size,
+    //        guid:0
+    //      }
+    // 
+    //      tally_alloc(bottom_up, n, frame_data.id);
+    // 
+    //    } else {
+    //      trace("GUID missing for rel="+rel+", relocation will be ignored!");
+    //    }
+    //  }
+    //}
+    // 
+    //if (dels!=null) {
+    //  for (del in dels) {
+    //    // Convert ID to GUID, allocs guaranteed already seen
+    //    trace("Got del "+del+", frame="+frame_data.id);
+    //    if (alloc_id_to_guid.exists(del.id)) {
+    //      del.guid = alloc_id_to_guid.get(del.id);
+    //      alloc_id_to_guid.remove(del.id);
+    //    } else {
+    //      trace("GUID missing for del="+del+", collection will be ignored!");
+    //    }
+    //  }
+    //}
 
     // TODO: top-down allocs
   }

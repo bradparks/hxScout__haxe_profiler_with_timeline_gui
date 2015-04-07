@@ -360,43 +360,67 @@ class FLMListener {
               data.set("value", arr);
               // handle_data is called below
             }
-            case 13: { // allocations
+            case 13: { // allocation_data
               var num:Int = flm_socket.input.readInt32();
               while (num>0) {
-                var n:NewAlloc = {
-                  id:flm_socket.input.readInt32(),
-                  type:flm_socket.input.readInt32(),
-                  stackid:flm_socket.input.readInt32(),
-                  size:flm_socket.input.readInt32(),
-                  guid:0
+                num--;
+                var op:Int = flm_socket.input.readInt32();
+                cur_frame.alloc_ops.push(op);  
+                switch(op) {
+                  case 0: { // allocation
+                    num -= 4;
+                    var n:NewAlloc = {
+                      id:flm_socket.input.readInt32(),
+                      type:(op!=1) ? flm_socket.input.readInt32() : 0,
+                      size:(op!=1) ? flm_socket.input.readInt32() : 0,
+                      stackid:(op==0) ? flm_socket.input.readInt32() : 0,
+                      guid:0
+                    }
+                    cur_frame.mem_alloc.push(n);
+                  }
+                  case 1: { // collection
+                    num -= 1;
+                    var n:DelAlloc = {
+                      id:flm_socket.input.readInt32(),
+                      guid:0
+                    }
+                    cur_frame.mem_dealloc.push(n);
+                  }
+                  case 2: { // reallocation
+                    num -= 3;
+                    var n:ReAlloc = {
+                      old_id:flm_socket.input.readInt32(),
+                      new_id:flm_socket.input.readInt32(),
+                      new_size:flm_socket.input.readInt32()
+                    }
+                    cur_frame.mem_realloc.push(n);
+                  }
                 }
-                cur_frame.mem_alloc.push(n);
-                num -= 4;
               }
             }
-            case 14: { // collections
-              var num:Int = flm_socket.input.readInt32();
-              while (num>0) {
-                var n:DelAlloc = {
-                  id:flm_socket.input.readInt32(),
-                  guid:0
-                }
-                cur_frame.mem_dealloc.push(n);
-                num -= 1;
-              }
-            }
-            case 15: { // reallocations
-              var num:Int = flm_socket.input.readInt32();
-              while (num>0) {
-                var n:ReAlloc = {
-                  old_id:flm_socket.input.readInt32(),
-                  new_id:flm_socket.input.readInt32(),
-                  new_size:flm_socket.input.readInt32()
-                }
-                cur_frame.mem_realloc.push(n);
-                num -= 3;
-              }
-            }
+            //case 14: { // collections
+            //  var num:Int = flm_socket.input.readInt32();
+            //  while (num>0) {
+            //    var n:DelAlloc = {
+            //      id:flm_socket.input.readInt32(),
+            //      guid:0
+            //    }
+            //    cur_frame.mem_dealloc.push(n);
+            //    num -= 1;
+            //  }
+            //}
+            //case 15: { // reallocations
+            //  var num:Int = flm_socket.input.readInt32();
+            //  while (num>0) {
+            //    var n:ReAlloc = {
+            //      old_id:flm_socket.input.readInt32(),
+            //      new_id:flm_socket.input.readInt32(),
+            //      new_size:flm_socket.input.readInt32()
+            //    }
+            //    cur_frame.mem_realloc.push(n);
+            //    num -= 3;
+            //  }
+            //}
           }
         }
       } catch( e:Dynamic) {
@@ -446,6 +470,7 @@ class Frame {
   public var push_stack_maps:Array<Array<Int>>;
   public var cpu:Float;
   //public var alloc:StringMap<Array<Dynamic>>;
+  public var alloc_ops:Array<Int>;
   public var mem_alloc:Array<NewAlloc>;
   public var mem_dealloc:Array<DelAlloc>;
   public var mem_realloc:Array<ReAlloc>;
@@ -482,6 +507,7 @@ class Frame {
     cpu = 0;
     // TODO: conditional allocation based on enabled metrics
     samples = new Array<SampleRaw>();
+    alloc_ops = new Array<Int>();
     mem_alloc = new Array<NewAlloc>();
     mem_dealloc = new Array<DelAlloc>();
     mem_realloc = new Array<ReAlloc>();

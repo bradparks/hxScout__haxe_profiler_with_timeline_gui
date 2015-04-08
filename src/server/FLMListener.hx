@@ -61,6 +61,7 @@ class FLMListener {
     s = null;
 
     // Optional hxt output
+    var hxts:Float = 0.0;
     var hxt:hxtelemetry.HxTelemetry = null;
     if (output_port>0) {
       trace("Will send bkg telemetry on port "+output_port);
@@ -443,8 +444,10 @@ class FLMListener {
         throw e;
       }
 
-      if (hxt!=null) hxt.advance_frame();
-
+      if (hxt!=null && openfl.Lib.getTimer()-hxts > 30) {
+        hxts = openfl.Lib.getTimer();
+        hxt.advance_frame();
+      }
       if (data!=null) handle_data(data);
 
     } // while (connected)

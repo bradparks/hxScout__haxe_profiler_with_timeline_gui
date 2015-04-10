@@ -437,6 +437,8 @@ class TabularDataPane extends Pane
   private var _data_source:AbsTabularDataSource;
   private var _style:Dynamic;
 
+  private var _lines:Shape;
+
   private static var DEFAULT_STYLE = {
     font:"DroidSans.ttf",
     color:0x66aadd,
@@ -468,6 +470,9 @@ class TabularDataPane extends Pane
     cont.addChild(_row_cont);
     cont.addChild(_toggle_all_btn);
 
+    _lines = new Shape();
+    addChild(_lines);
+
     _data_source = data_source;
     redraw();
   }
@@ -482,7 +487,10 @@ class TabularDataPane extends Pane
   {
     var did_scroll = _scroll_invalid || Math.abs(_wheel_speed)>5;
     super.handle_enter_frame(e);
-    if (did_scroll) { revise_in_view(); }
+    if (did_scroll) {
+      revise_in_view();
+      _lines.y = _row_cont.y + PAD*1.5 - (_row_cont.cont.scrollRect.y % _style.row_height);
+    }
   }
 
   override private function resize():Void
@@ -495,6 +503,17 @@ class TabularDataPane extends Pane
     super.resize();
 
     reposition();
+
+    _lines.x = _row_cont.x;
+    _lines.y = _row_cont.y + PAD*1.5;
+    _lines.graphics.clear();
+    _lines.graphics.beginFill(0xffffff);
+    var y = 0;
+    while (y < _row_cont.height) {
+      y = y + _style.row_height;
+      _lines.graphics.drawRect(PAD*3, y, _width-PAD*6,1);
+    }
+    _lines.alpha = 0.08;
   }
 
   private var _cur_col_sort:Int = -1;

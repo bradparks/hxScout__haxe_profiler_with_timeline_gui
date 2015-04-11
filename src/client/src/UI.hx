@@ -437,7 +437,7 @@ class TabularDataPane extends Pane
   private var _data_source:AbsTabularDataSource;
   private var _style:Dynamic;
 
-  private var _lines:Shape;
+  private var _lines:Sprite;
 
   private static var DEFAULT_STYLE = {
     font:"DroidSans.ttf",
@@ -470,8 +470,9 @@ class TabularDataPane extends Pane
     cont.addChild(_row_cont);
     cont.addChild(_toggle_all_btn);
 
-    _lines = new Shape();
+    _lines = new Sprite();
     addChild(_lines);
+    _lines.mouseEnabled = false;
 
     _data_source = data_source;
     redraw();
@@ -489,7 +490,10 @@ class TabularDataPane extends Pane
     super.handle_enter_frame(e);
     if (did_scroll) {
       revise_in_view();
-      _lines.y = _row_cont.y + PAD*1.5 - (_row_cont.cont.scrollRect.y % _style.row_height);
+      var yy = (_row_cont.cont.scrollRect.y % (2.0*_style.row_height));
+      var r = _lines.scrollRect;
+      r.y = yy;
+      _lines.scrollRect = r;
     }
   }
 
@@ -508,12 +512,13 @@ class TabularDataPane extends Pane
     _lines.y = _row_cont.y + PAD*1.5;
     _lines.graphics.clear();
     _lines.graphics.beginFill(0xffffff);
-    var y = 0;
-    while (y < _row_cont.height) {
-      y = y + _style.row_height;
-      _lines.graphics.drawRect(PAD*3, y, _width-PAD*6,1);
+    var y = 0.0;
+    while (y < _row_cont.height+_style.row_height*2) {
+      _lines.graphics.drawRect(PAD*3, y+1, _width-PAD*6,_style.row_height);
+      y = y + _style.row_height*2.0;
     }
-    _lines.alpha = 0.08;
+    _lines.alpha = 0.02;
+    _lines.scrollRect = new flash.geom.Rectangle(0,0,_width,_row_cont.height+2*PAD);
   }
 
   private var _cur_col_sort:Int = -1;

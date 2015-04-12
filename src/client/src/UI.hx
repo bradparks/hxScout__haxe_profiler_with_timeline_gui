@@ -253,9 +253,10 @@ class TabbedPane extends Pane
     label.mouseEnabled = false;
 
     Util.begin_gradient(tab.graphics, label.width*1.4, label.height);
-    tab.graphics.lineStyle(1, 0x555555);
+    tab.graphics.lineStyle(1, 0x222222);
     tab.graphics.drawRect(0,0,label.width*1.4, TAB_HEIGHT);
     label.x = label.width*0.2;
+    label.y = 1;
     tab.addChild(label);
 
     tab.x = 0;
@@ -282,8 +283,8 @@ class TabbedPane extends Pane
     if (_selected_tab==idx) return;
     _selected_tab = idx;
 
-    var highlight_on = new openfl.geom.ColorTransform(1,1.02,1.04,1,0,0,0);
-    var highlight_off = new openfl.geom.ColorTransform(0.75,0.75,0.75,1,10,10,10);
+    var highlight_on = new openfl.geom.ColorTransform(0.9,0.9,0.9,1,0,0,0);
+    var highlight_off = new openfl.geom.ColorTransform(0.5,0.5,0.5,1,10,10,10);
 
     for (i in 0...tab_cont.numChildren) {
       tab_cont.getChildAt(i).transform.colorTransform = i==idx ? highlight_on : highlight_off;
@@ -309,7 +310,9 @@ class TabbedPane extends Pane
         p.y = TAB_HEIGHT;
       }
     }
+    tab_cont.y = 2;
     tab_cont.x = PAD;
+    tab_cont.scrollRect = new flash.geom.Rectangle(0,0,_width,TAB_HEIGHT+PAD-1);
   }
 
 }
@@ -517,7 +520,7 @@ class TabularDataPane extends Pane
       _lines.graphics.drawRect(PAD*3, y+1, _width-PAD*6,_style.row_height);
       y = y + _style.row_height*2.0;
     }
-    _lines.alpha = 0.02;
+    _lines.alpha = 0.03;
     _lines.scrollRect = new flash.geom.Rectangle(0,0,_width,_row_cont.height+2*PAD);
   }
 

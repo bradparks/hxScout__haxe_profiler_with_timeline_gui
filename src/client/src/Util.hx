@@ -118,7 +118,7 @@ class Util {
                                    t:Float=0.4)
   {
     var callbacks = [];
-    if (Reflect.hasField(d, "mouseEnabled")) cast(d).mouseEnabled = false;
+    if (Reflect.hasField(d, "mouseEnabled")) cast(d, InteractiveObject).mouseEnabled = false;
     // TODO: dispose / remove events listeners framework
     Actuate.tween(d, 0.4,
                   { alpha: 0, }
@@ -244,7 +244,7 @@ class Util {
       is_hidden = !is_hidden;
       Actuate.tween(btn, 0.2, { rotation: is_hidden ? -90 : 0 });
       if (is_hidden) do_hide();
-      else do_show(cast(e).shiftKey);
+      else do_show(cast(e, MouseEvent).shiftKey);
 
       // Invalidate scrollbars
       do_refresh_scrollbars();

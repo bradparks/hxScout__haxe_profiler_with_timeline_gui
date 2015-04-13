@@ -545,7 +545,7 @@ abstract Object<T>(Dynamic<T>) from Dynamic<T> {
         #end
     }
 
-    @:from static public inline function fromStringMap(m:StringMap<T>) {
+    @:from static public inline function fromStringMap(m:StringMap<Dynamic>) {
       var data = new Object<Dynamic>();
       for (key in m.keys()) {
         data[key] = m.get(key);

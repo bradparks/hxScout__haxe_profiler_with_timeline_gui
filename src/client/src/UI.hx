@@ -83,10 +83,10 @@ class Pane extends Sprite {
   {
     var dt:Int = flash.Lib.getTimer() - _last_wheel_event;
     var new_speed = Math.max(25, Math.min(Math.pow(500/dt, 1.6), 800));
-    if (cast(e).shiftKey) new_speed *= 2;
+    if (cast(e, MouseEvent).shiftKey) new_speed *= 2;
     _wheel_speed = dt > 300 ? 25 : Std.int(0.85*Math.abs(_wheel_speed) + 0.15*new_speed);
     //trace("wheel event, delta="+cast(e).delta+", dt="+dt+", speed="+_wheel_speed);
-    if (cast(e).delta>0) _wheel_speed = -_wheel_speed;
+    if (cast(e, MouseEvent).delta>0) _wheel_speed = -_wheel_speed;
     wheel_speed_updated();
   }
 
@@ -291,7 +291,7 @@ class TabbedPane extends Pane
       panes[i].visible = i==idx;
 
       // openfl bug /w set colortransform on parent of textfields?
-      cast(tab_cont.getChildAt(i)).getChildAt(0).alpha = 1;
+      cast(tab_cont.getChildAt(i), DisplayObjectContainer).getChildAt(0).alpha = 1;
     }
 
     //plbl.visible = tgt==pcont;
@@ -824,7 +824,7 @@ class TabularDataPane extends Pane
       var needs_hidden = later==null || (later.visible && later.parent!=null);
       Actuate.tween(btn, 0.2, { rotation: needs_hidden ? -90 : 0 });
       if (needs_hidden) do_hide();
-      else do_show(cast(e).shiftKey);
+      else do_show(cast(e, MouseEvent).shiftKey);
 
       // Invalidate scrollbars
       do_refresh_scrollbars();

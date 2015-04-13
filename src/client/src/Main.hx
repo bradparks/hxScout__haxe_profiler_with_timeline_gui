@@ -1049,7 +1049,7 @@ class HXScoutClientGUI extends Sprite
     if (nav_pane.cont.numChildren<1) {
       nav_pane.cont.addChild(new Bitmap(new BitmapData(2048, layout.nav.height, true, 0x0)));
     }
-    var bd:BitmapData = cast(nav_pane.cont.getChildAt(0)).bitmapData;
+    var bd:BitmapData = cast(nav_pane.cont.getChildAt(0), Bitmap).bitmapData;
     bd.fillRect(new flash.geom.Rectangle(0,0,2048,layout.nav.height), 0); // clear
   }
 
@@ -1090,9 +1090,9 @@ class HXScoutClientGUI extends Sprite
       m.scale(nav_scalex*1/layout.frame_width, sc);
       m.translate(0, nav_pane.innerHeight);
 
-      cast(nav_pane.cont.getChildAt(0)).bitmapData.draw(s, m, null, openfl.display.BlendMode.LIGHTEN);
-      cast(nav_pane.cont.getChildAt(0)).bitmapData.draw(s, m);
-      cast(nav_pane.cont.getChildAt(0)).bitmapData.draw(s, m);
+      cast(nav_pane.cont.getChildAt(0), Bitmap).bitmapData.draw(s, m, null, openfl.display.BlendMode.LIGHTEN);
+      cast(nav_pane.cont.getChildAt(0), Bitmap).bitmapData.draw(s, m);
+      cast(nav_pane.cont.getChildAt(0), Bitmap).bitmapData.draw(s, m);
 
       if (!session.temp_running_mem.exists("total")) continue;
 
@@ -1132,8 +1132,8 @@ class HXScoutClientGUI extends Sprite
       m.scale(rescale, 1);
       bd.draw(nav_pane.cont, m, null, null, null, true);
 
-      cast(nav_pane.cont.getChildAt(0)).bitmapData.dispose();
-      cast(nav_pane.cont.getChildAt(0)).bitmapData = bd;
+      cast(nav_pane.cont.getChildAt(0), Bitmap).bitmapData.dispose();
+      cast(nav_pane.cont.getChildAt(0), Bitmap).bitmapData = bd;
       nav_scalex *= rescale;
       //nav_ctrl.redraw();
     }
@@ -1149,7 +1149,7 @@ class HXScoutClientGUI extends Sprite
 
     var idx:Int = Math.floor(id/16);
     var arr = (pane==timing_pane) ? timing_shapes : memory_shapes;
-    while (arr.length<=idx) arr.push(new openfl._v2.display.ShapeNoEvents());
+    while (arr.length<=idx) arr.push(new Shape()); //openfl._v2.display.ShapeNoEvents());
     var s:Shape = arr[idx];
 
     s.scaleY = pane==timing_pane ? nav_ctrl.timing_scaley : nav_ctrl.memory_scaley;
@@ -1402,7 +1402,7 @@ class SelectionController {
     selection.stage.addEventListener(MouseEvent.MOUSE_MOVE, handle_select_move);
     selection.stage.addEventListener(MouseEvent.MOUSE_UP, handle_select_stop);
 
-    select_at(Math.max(layout.frame_width/2, timing_pane.cont.mouseX), !cast(e).shiftKey);
+    select_at(Math.max(layout.frame_width/2, timing_pane.cont.mouseX), !cast(e, MouseEvent).shiftKey);
   }
 
   function handle_select_stop(e:Event)

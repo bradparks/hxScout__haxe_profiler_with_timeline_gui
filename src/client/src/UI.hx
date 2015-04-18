@@ -412,15 +412,54 @@ class ToggleButton extends Sprite
   {
     this.graphics.clear();
     var dx:Int = toggle ? 0 : 2;
-    this.graphics.lineStyle(1, 0xaaaaaa, 0.6);
+    //this.graphics.lineStyle(1, 0x0, 0.75);
     this.graphics.beginFill(0xaaaaaa, 0.2);
     this.graphics.drawRoundRect(-8,-8,16,16,4);
+    this.graphics.lineStyle(2, 0xaaaaaa, 1);
+    this.graphics.moveTo(-5,0);
+    this.graphics.lineTo(5, 0);
+    if (!toggle) {
+      this.graphics.moveTo(0,-5);
+      this.graphics.lineTo(0, 5);
+    }
+    this.graphics.moveTo(0,0);
+  }
+  public function do_toggle():Void
+  {
+    toggle = !toggle;
+    redraw();
+  }
+}
+
+class HierButton extends Sprite
+{
+  private var lbl:TextField;
+  public function new() {
+    super();
+    lbl = Util.make_label("Hierarchy", 12);
+    addChild(lbl);
+    lbl.mouseEnabled = false;
+    lbl.x = 8;
+    lbl.y = -8;
+    redraw();
+  }
+  public var toggle(get,null):Bool = true;
+  public function get_toggle():Bool { return toggle; }
+  function redraw()
+  {
+    this.graphics.clear();
+    var dx:Int = toggle ? 2 : 0;
+    //this.graphics.lineStyle(1, 0x0, 0.75);
+    this.graphics.beginFill(0xaaaaaa, 0.2);
+    this.graphics.drawRoundRect(-8,-8,16+2+lbl.width,16,4);
+    this.graphics.lineStyle(2, 0xaaaaaa, 1);
     this.graphics.moveTo(-3-dx,-4);
     this.graphics.lineTo(3-dx, -4);
     this.graphics.moveTo(-3,0);
     this.graphics.lineTo(3, 0);
     this.graphics.moveTo(-3+dx,4);
     this.graphics.lineTo(3+dx, 4);
+    this.graphics.moveTo(0,0);
   }
   public function do_toggle():Void
   {
@@ -436,6 +475,7 @@ class TabularDataPane extends Pane
 
   private var _label_cont:Sprite;
   private var _toggle_all_btn:ToggleButton;
+  private var _toggle_hier_btn:HierButton;
   private var _row_cont:Pane;
   private var _data_source:AbsTabularDataSource;
   private var _style:Dynamic;
@@ -465,13 +505,19 @@ class TabularDataPane extends Pane
 
     super();
 
+    _toggle_hier_btn = new HierButton();
+    _toggle_hier_btn.x = 8; _toggle_hier_btn.y = 8;
+    AEL.add(_toggle_hier_btn, MouseEvent.CLICK, toggle_hier);
+
     _toggle_all_btn = new ToggleButton();
-    _toggle_all_btn.x = _toggle_all_btn.y = 8;
+    _toggle_all_btn.x = _toggle_hier_btn.x + _toggle_hier_btn.width + 4;
+    _toggle_all_btn.y = 8;
     AEL.add(_toggle_all_btn, MouseEvent.CLICK, toggle_all);
 
     cont.addChild(_label_cont);
     cont.addChild(_row_cont);
     cont.addChild(_toggle_all_btn);
+    cont.addChild(_toggle_hier_btn);
 
     _lines = new Sprite();
     addChild(_lines);
@@ -526,6 +572,7 @@ class TabularDataPane extends Pane
 
   private var _cur_col_sort:Int = -1;
   private var _cur_col_desc:Bool = true;
+  private var _hierarchy_enabled:Bool = true; // Need a toggle button, disable expand all
 
   private var _row_hierarchy:IntMap<Array<Int>>;
   private var _sorted_rows:Array<Int>;
@@ -540,27 +587,37 @@ class TabularDataPane extends Pane
     _sorted_lookup = new IntMap<Int>();
     var desc:Int = descending ? 1 : -1;
 
-    function recursive_sort(indexes:Array<Int>):Void
-    {
-      //trace("Sorting: "+indexes);
-      var sorted:Array<Int> = new Array<Int>();
-      for (row_idx in indexes) sorted.push(row_idx); //trace(" - "+row_idx+" = "+_data_source.get_row_value(row_idx, col_idx)); }
-      sorted.sort(function(i0:Int, i1:Int):Int {
+    function compare_rows(i0:Int, i1:Int):Int {
         var val0 = _data_source.get_row_value(i0, col_idx);
         var val1 = _data_source.get_row_value(i1, col_idx);
         return val0 > val1 ? -desc :
               (val0 < val1 ?  desc : 0);
-      });
+      }
+
+    function hierarchical_sort(indexes:Array<Int>):Void
+    {
+      //trace("Sorting: "+indexes);
+      var sorted:Array<Int> = new Array<Int>();
+      for (row_idx in indexes) sorted.push(row_idx);
+      sorted.sort(compare_rows);
       //trace("Sorted:  "+sorted);
       for (row_idx in sorted) {
         _sorted_lookup.set(row_idx, _sorted_rows.length);
         _sorted_rows.push(row_idx);
-        if (_row_hierarchy.exists(row_idx)) recursive_sort(_row_hierarchy.get(row_idx));
+        if (_row_hierarchy.exists(row_idx)) hierarchical_sort(_row_hierarchy.get(row_idx));
       }
     }
 
+    function flat_sort():Void
+    {
+      var n = _data_source.get_num_rows();
+      for (row_idx in 0...n) _sorted_rows.push(row_idx);
+      _sorted_rows.sort(compare_rows);
+    }
+
     // Start with the roots
-    recursive_sort(_row_hierarchy.get(-1));
+    if (_hierarchy_enabled) hierarchical_sort(_row_hierarchy.get(-1));
+    else flat_sort();
 
     if (reposition_now) {
       reposition();
@@ -604,7 +661,8 @@ class TabularDataPane extends Pane
       //}
 
       var indent = _data_source.get_indent(row_idx);
-      row_sprite.getChildAt(0).x = _style.preindent + INDENT_X * indent;
+      row_sprite.getChildAt(0).x = _style.preindent + (_hierarchy_enabled ? INDENT_X * indent : 0);
+      if (row_sprite.collapse_btn!=null) row_sprite.collapse_btn.visible = _hierarchy_enabled;
 
       var num_cols = _data_source.get_num_cols();
       for (i in 0...num_cols) {
@@ -621,6 +679,18 @@ class TabularDataPane extends Pane
 
     _first_row = 0;
     _last_row = 0;
+    revise_in_view();
+  }
+
+  // When a row is selected and the view changes (sort, hierarchy, etc), we'd like to
+  // ensure this row is still in view later.  FYI, trace could be keyed on non-row_idx,
+  // or better yet, make row_idx global across frames? Just keep running idx_offset sum.
+  private function ensure_in_view(rs:TabularRowSprite, reposition_first:Bool=true):Void
+  {
+    if (reposition_first) reposition();
+    var r:flash.geom.Rectangle = _row_cont.cont.scrollRect;
+    r.y = Math.max(0, rs.y - _style.row_height);
+    _row_cont.cont.scrollRect = r;
     revise_in_view();
   }
 
@@ -703,6 +773,7 @@ class TabularDataPane extends Pane
     function toggle_sort(e:flash.events.Event):Void {
       var col_idx = _label_cont.getChildIndex(e.target);
       sort_on_col(col_idx, col_idx==_cur_col_sort ? !_cur_col_desc : true);
+      if (_selected_row!=null) ensure_in_view(_selected_row, false);
     }
 
     var lbls:Array<String> = _data_source.get_labels();
@@ -721,7 +792,7 @@ class TabularDataPane extends Pane
     _last_row = 0;
 
     _row_hierarchy = new IntMap<Array<Int>>();
-    _row_hierarchy.set(-1, new Array<Int>());
+    _row_hierarchy.set(-1, new Array<Int>()); // Create roots under row_idx -1
     var last_row_idx_at_indent:IntMap<Int> = new IntMap<Int>();
     last_row_idx_at_indent.set(-1, -1);
 
@@ -836,6 +907,7 @@ class TabularDataPane extends Pane
 
   function toggle_all(e):Void
   {
+    if (!_hierarchy_enabled) return; // no-op without hierarchy
     _toggle_all_btn.do_toggle();
     var expand:Bool = _toggle_all_btn.toggle;
 
@@ -848,8 +920,28 @@ class TabularDataPane extends Pane
     reposition();
   }
 
+  function toggle_hier(e):Void
+  {
+    _toggle_hier_btn.do_toggle();
+    _hierarchy_enabled = _toggle_hier_btn.toggle;
+
+    // reset toggle button
+    _toggle_all_btn.x = _toggle_hier_btn.x + _toggle_hier_btn.width + 4;
+    Actuate.tween(_toggle_all_btn, 0.4, { alpha: _hierarchy_enabled ? 1 : 0 });
+    if (_hierarchy_enabled && !_toggle_all_btn.toggle) { toggle_all(e); }
+
+    if (!_hierarchy_enabled) { // expand all
+      var n = _data_source.get_num_rows();
+      for (idx in 0...n) _row_sprites[idx].visible = true;
+    }
+    sort_on_col(_cur_col_sort, _cur_col_desc, true);
+    if (_selected_row!=null) ensure_in_view(_selected_row, false);
+  }
+
+  private var _selected_row:TabularRowSprite;
   function handle_row_cont_click(e:flash.events.MouseEvent):Void
   {
+    // TODO: don't use getOBjectsUnderPoint - requires clicking on text
     var objs = _row_cont.cont.getObjectsUnderPoint(new flash.geom.Point(e.stageX, e.stageY));
     if (objs.length>0) {
       var obj:DisplayObject = objs[0];
@@ -860,6 +952,13 @@ class TabularDataPane extends Pane
         var rs:TabularRowSprite = cast(obj, TabularRowSprite);
         if (objs.indexOf(rs.collapse_btn)>=0) {
           rs.toggle_collapse(e);
+        } else {
+          if (_selected_row!=null) {
+            _selected_row.graphics.clear();
+          }
+          _selected_row = rs;
+          _selected_row.graphics.beginFill(0xaaaabb, 0.3);
+          _selected_row.graphics.drawRect(0,0,_width-PAD*6,_style.row_height);
         }
       }
     }

@@ -105,6 +105,8 @@ class Util {
                                         c2:UInt=0x535353,
                                         angle:Float=-1.5757963):Void
   {
+    //g.beginFill(c1);
+    //return;
     GRADIENT_M.identity();
     GRADIENT_M.createGradientBox(w, h, angle);
     g.beginGradientFill(openfl.display.GradientType.LINEAR,

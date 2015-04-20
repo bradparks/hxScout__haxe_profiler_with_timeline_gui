@@ -405,20 +405,19 @@ class TabularRowSprite extends Sprite
 
 class ToggleButton extends Sprite
 {
-  public var toggle(get,null):Bool = false;
+  public var is_toggled(default,null):Bool = false;
   public function new() { super(); redraw(); }
-  public function get_toggle():Bool { return toggle; }
   function redraw()
   {
     this.graphics.clear();
-    var dx:Int = toggle ? 0 : 2;
+    var dx:Int = is_toggled ? 0 : 2;
     //this.graphics.lineStyle(1, 0x0, 0.75);
     this.graphics.beginFill(0xaaaaaa, 0.2);
     this.graphics.drawRoundRect(-8,-8,16,16,4);
     this.graphics.lineStyle(2, 0xaaaaaa, 1);
     this.graphics.moveTo(-5,0);
     this.graphics.lineTo(5, 0);
-    if (!toggle) {
+    if (!is_toggled) {
       this.graphics.moveTo(0,-5);
       this.graphics.lineTo(0, 5);
     }
@@ -426,7 +425,7 @@ class ToggleButton extends Sprite
   }
   public function do_toggle():Void
   {
-    toggle = !toggle;
+    is_toggled = !is_toggled;
     redraw();
   }
 }
@@ -570,8 +569,9 @@ class TabularDataPane extends Pane
     _lines.scrollRect = new flash.geom.Rectangle(0,0,_width,_row_cont.height+2*PAD);
   }
 
-  private var _cur_col_sort:Int = -1;
+  private var _cur_col_sort:Int = 0;
   private var _cur_col_desc:Bool = true;
+
   private var _hierarchy_enabled:Bool = true; // Need a toggle button, disable expand all
 
   private var _row_hierarchy:IntMap<Array<Int>>;
@@ -699,7 +699,7 @@ class TabularDataPane extends Pane
   private var _in_view:Array<TabularRowSprite>;
   function revise_in_view()
   {
-    if (_sorted_rows.length==0) return;
+    if (_sorted_rows==null || _sorted_rows.length==0) return;
 
     var row_sprite:TabularRowSprite;
     var r:flash.geom.Rectangle = _row_cont.cont.scrollRect;
@@ -763,7 +763,13 @@ class TabularDataPane extends Pane
     // draw labels
     draw_labels();
     draw_rows();
-    sort_on_col(1, true, false);
+
+    // Maintain toggle / sort state
+    sort_on_col(_cur_col_sort, _cur_col_desc, false);
+    if (_hierarchy_enabled && !_toggle_all_btn.is_toggled) {
+      _toggle_all_btn.do_toggle();
+      toggle_all();
+    }
 
     resize();
   }
@@ -786,8 +792,6 @@ class TabularDataPane extends Pane
 
   function draw_rows()
   {
-    var start_collapsed = true;
-
     _first_row = 0;
     _last_row = 0;
 
@@ -824,7 +828,7 @@ class TabularDataPane extends Pane
         add_collapse_button(row_sprite, _row_cont.invalidate_scrollbars);
       }
 
-      row_sprite.visible = start_collapsed && indent==0;
+      //row_sprite.visible = start_collapsed && indent==0;
 
       for (col_idx in 0..._data_source.get_num_cols()) {
         var value_str:String = Util.add_commas(Std.int(_data_source.get_row_value(row_idx, col_idx)));
@@ -905,11 +909,11 @@ class TabularDataPane extends Pane
     row_sprite.toggle_collapse = toggle_collapse;
   }
 
-  function toggle_all(e):Void
+  function toggle_all(e=null):Void
   {
     if (!_hierarchy_enabled) return; // no-op without hierarchy
     _toggle_all_btn.do_toggle();
-    var expand:Bool = _toggle_all_btn.toggle;
+    var expand:Bool = _toggle_all_btn.is_toggled;
 
     var n = _data_source.get_num_rows();
     for (idx in 0...n) {
@@ -920,7 +924,7 @@ class TabularDataPane extends Pane
     reposition();
   }
 
-  function toggle_hier(e):Void
+  function toggle_hier(e=null):Void
   {
     _toggle_hier_btn.do_toggle();
     _hierarchy_enabled = _toggle_hier_btn.toggle;
@@ -928,7 +932,7 @@ class TabularDataPane extends Pane
     // reset toggle button
     _toggle_all_btn.x = _toggle_hier_btn.x + _toggle_hier_btn.width + 4;
     Actuate.tween(_toggle_all_btn, 0.4, { alpha: _hierarchy_enabled ? 1 : 0 });
-    if (_hierarchy_enabled && !_toggle_all_btn.toggle) { toggle_all(e); }
+    if (_hierarchy_enabled && !_toggle_all_btn.is_toggled) { toggle_all(); }
 
     if (!_hierarchy_enabled) { // expand all
       var n = _data_source.get_num_rows();

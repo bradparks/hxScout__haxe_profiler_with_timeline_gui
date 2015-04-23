@@ -105,8 +105,11 @@ class Util {
                                         c2:UInt=0x535353,
                                         angle:Float=-1.5757963):Void
   {
-    //g.beginFill(c1);
-    //return;
+    // OpenFL >= "3"
+#if (!openfl_legacy)
+    next_no_gradient(g,w,h,c1,c2,angle);
+#else
+    // Legacy
     GRADIENT_M.identity();
     GRADIENT_M.createGradientBox(w, h, angle);
     g.beginGradientFill(openfl.display.GradientType.LINEAR,
@@ -114,7 +117,13 @@ class Util {
                         [1,1],
                         [0,255],
                         GRADIENT_M);
+#end
   }
+
+#if (!openfl_legacy)
+  @:deprecated("TODO: OpenFL next doesn't seem to support gradient fills...")
+  static inline function next_no_gradient(g:openfl.display.Graphics,w:Float,h:Float,c1:UInt,c2:UInt,angle:Float):Void { g.beginFill(c1); }
+#end
 
   public static function fade_away(d:DisplayObject,
                                    t:Float=0.4)

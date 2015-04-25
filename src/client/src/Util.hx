@@ -105,11 +105,11 @@ class Util {
                                         c2:UInt=0x535353,
                                         angle:Float=-1.5757963):Void
   {
-    // OpenFL >= "3"
+    // OpenFL >= "3" next mode
 #if (!openfl_legacy)
     next_no_gradient(g,w,h,c1,c2,angle);
 #else
-    // Legacy
+    // Legacy - supports gradients
     GRADIENT_M.identity();
     GRADIENT_M.createGradientBox(w, h, angle);
     g.beginGradientFill(openfl.display.GradientType.LINEAR,

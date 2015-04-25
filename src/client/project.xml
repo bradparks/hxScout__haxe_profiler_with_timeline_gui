@@ -2,8 +2,12 @@
 <project>
 
   <meta title="hxScout" package="com.jcward.hxscout.gui" version="1.0.0" company="Jeff Ward" />
-  <app main="Main" path="export" file="hxScoutMain" />
-  <window width="1280" height="1024" background="#333333" resizable="true" fps="30" hardware="true" vsync="false"  />
+  <app main="Main" file="hxScoutMain" />
+  <app path="export/legacy/debug" if="legacy debug" />
+  <app path="export/legacy/release" if="legacy release" />
+  <app path="export/next/debug" if="debug" unless="legacy" />
+  <app path="export/next/release" if="release" unless="legacy" />
+  <window width="1280" height="1024" background="#333333" resizable="true" fps="30" hardware="true" vsync="true"  />
 
   <source path="src" />
   <source path="lib" />

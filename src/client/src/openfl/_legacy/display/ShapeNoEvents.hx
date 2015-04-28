@@ -1,4 +1,5 @@
-package openfl._v2.display; #if (!flash && !html5 && !openfl_next)
+//package openfl._v2.display; #if (!flash && !html5 && !openfl_next)
+package openfl._legacy.display; #if (!flash && !html5 && !openfl_next)
 
 
 class ShapeNoEvents extends Shape {

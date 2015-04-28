@@ -580,6 +580,7 @@ class FLMSession {
       }
     }
 
+    // ~37% of time spent in here, but none saved via AllocData/no-children
     if (frame_data.samples!=null && frame_data.samples.length>0) collate_sample_data(frame_data);
     if (frame_data.mem_dealloc.length>0 || frame_data.mem_alloc.length>0) collate_alloc_data(frame_data);
 
@@ -1149,7 +1150,11 @@ class HXScoutClientGUI extends Sprite
 
     var idx:Int = Math.floor(id/16);
     var arr = (pane==timing_pane) ? timing_shapes : memory_shapes;
-    while (arr.length<=idx) arr.push(new Shape()); //openfl._v2.display.ShapeNoEvents());
+#if openfl_legacy
+    while (arr.length<=idx) arr.push(new openfl._legacy.display.ShapeNoEvents());
+#else
+    while (arr.length<=idx) arr.push(new Shape());
+#end
     var s:Shape = arr[idx];
 
     s.scaleY = pane==timing_pane ? nav_ctrl.timing_scaley : nav_ctrl.memory_scaley;

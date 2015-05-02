@@ -1446,8 +1446,8 @@ class SelectionController {
   public static var mem_keys = ["total","used","managed.used","bitmap","bytearray","script","network","telemetry.overhead","managed","bitmap.display","bitmap.data"];
   private static var mem_info = {
     "managed.used":{ name:"ActionScript Objects", hxt_name:"Haxe Objects", color:0x227788 },
-    "bitmap":{ name:"Bitmap", hxt_name:"Bitmap", color:0x22aa99 },
-    "telemetry.overhead":{ name:"Other", hxt_name:"Other", color:0x667755 },
+    "bitmap":{ name:"Bitmap", color:0x22aa99 },
+    "telemetry.overhead":{ name:"Other", color:0x667755 },
     "network":{ redirect:"telemetry.overhead" }, // Also 'other', Network Buffers
     "script":{ name:"SWF Files", hxt_name:"Unexpected (SWF Files)", color:0x119944 },
     "bytearray":{ name:"ByteArrays", hxt_name:"Unexpected (ByteArrays)", color:0x11bb66 }
@@ -1455,12 +1455,27 @@ class SelectionController {
 
   private static var timing_keys = ["as", "rend", "net", "gc", "other"];
   private static var timing_info = {
-    "as":{ name:"ActionScript", color:0x2288cc },
+    "as":{ name:"ActionScript", hxt_name:"User", color:0x2288cc },
     "rend":{ name:"Rendering", color:0x66aa66 },
     "net":{ name:"Network", color:0xcccc66 },
     "gc":{ name:"Garbage Collection", color:0xdd5522 },
     "other":{ name:"Other", color:0xaa4488 }
   }
+
+  private static var __init:Bool = (function() {
+    Util.each(mem_info, function(k,v:Dynamic) { v.hxt_name = v.hxt_name==null ? v.name : v.hxt_name; });
+    Util.each(timing_info, function(k,v:Dynamic) { v.hxt_name = v.hxt_name==null ? v.name : v.hxt_name; });
+
+    // var s:StringMap<Int> = new StringMap<Int>();
+    // s.set("foo", 5);
+    // s.set("bar", 111);
+    // s.set("joe", 43);
+    // Util.each(s, function(s:String, i:Int):Void {
+    //   trace("s["+s+"] = "+i);
+    // });
+
+    return true;
+  })();
 
   private var _prof_sort_self:Bool = false;
   public function handle_sort_self(e:Event=null):Void { _prof_sort_self = true; redraw(); }

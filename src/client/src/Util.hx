@@ -264,4 +264,23 @@ class Util {
     AEL.add(btn, MouseEvent.CLICK, toggle_collapse);
   }
 
+  // Slow dynamic each. todo, type parameteric? macro?
+  public static function each(obj:Dynamic, func:Dynamic):Void
+  {
+    var o:FLMListener.Object<Dynamic> = obj;
+    var m:Map<Dynamic,Dynamic> = obj;
+    if (Std.is(obj, Array)) {
+      for (val in cast(obj, Array<Dynamic>)) { func(val); }
+    } if (m!=null) {
+      for (key in m.keys()) { func(key, m.get(key)); }
+    } else if (o!=null) {
+      for (key in Reflect.fields(o)) {
+        func(key, Reflect.field(o, key));
+      }
+    } else {
+      throw "Invalid input to each(): "+obj;
+    }
+  }
+
+
 }

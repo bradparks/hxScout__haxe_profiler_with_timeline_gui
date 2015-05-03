@@ -7,11 +7,18 @@ import haxe.io.*;
 import haxe.ds.StringMap;
 import haxe.ds.IntMap;
 
-typedef Timing = {
+class HierDur {
+  public var self_time:Int;
+  public var total_time:Int;
+  public var children:IntMap<HierDur>;
+  public function new() { }
+}
+
+typedef FrameTiming = {
   var delta:Int;
   var span:Int;
   var self_time:Int;
-  var prev:Timing;
+  var prev:FrameTiming;
 }
 
 typedef NewAlloc = { // aka struct
@@ -55,6 +62,9 @@ class FLMListener {
     trace("Waiting for FLM on "+port+"...");
     var flm_socket : Socket = s.accept();
     var inst_id:Int = (next_inst_id++);
+
+    var dur_strings:Array<String> = [];
+    var dur_lookup:StringMap<Int> = new StringMap<Int>();
 
     // Are we supposed to close the "parent" socket?
     s.close();
@@ -160,7 +170,7 @@ class FLMListener {
 				//}
 	 
 				if (name=='.swf.name') {
-					send_message({session_name:data['value'], inst_id:inst_id, amf_mode:amf_mode});
+					send_message({non_frame:true, session_name:data['value'], inst_id:inst_id, amf_mode:amf_mode});
 				}
 
 				if (name=='.trace') {
@@ -169,25 +179,25 @@ class FLMListener {
         }
 
 				// - - - - - - - - - - - -
-				// Timing / Span / Delta
+				// FrameTiming / Span / Delta
 				// - - - - - - - - - - - -
 				if (data['delta']!=null) {
 					// Delta without a span implies span = 0 ?
-					var t:Timing = { delta:data['delta'], span:data['span']==null?0:data['span'], prev:null, self_time:0 };
+					var t:FrameTiming = { delta:data['delta'], span:data['span']==null?0:data['span'], prev:null, self_time:0 };
 	 
 					cur_frame.duration.total += t.delta;
 	 
 					if (t.span>cur_frame.duration.total) {
-						if (name!='.network.localconnection.idle' &&
-								name!='.rend.screen') {
+						if (!amf_mode || (name!='.network.localconnection.idle' &&
+                              name!='.rend.screen')) {
 							trace("??? Event larger ("+t.span+") than current frame ("+cur_frame.duration.total+"): "+data);
 						}
 					}
-	 
+
 					var self_time = t.span;
 					var lookback = t.span-t.delta;
 					//trace("- Considering: "+data+", self="+self_time+", lookback="+lookback+" -- t="+t);
-					var tref:Timing = cur_frame.timing;
+					var tref:FrameTiming = cur_frame.timing;
 					while (lookback>0 && tref!=null) {
 						if (lookback>=tref.delta) {
 							self_time -= tref.delta;
@@ -207,7 +217,32 @@ class FLMListener {
 					if (self_time<0) throw "Umm, can't have negative self time!!";
 	 
 					//if (next_is_as) trace("next_is_as on: "+name);
-	 
+
+          // Hierarchical timing
+          if (!amf_mode) {
+            var start_len = dur_strings.length;
+            var nibs:Array<String> = name.split(".");
+            var ptr:HierDur = cur_frame.hierdur;
+            for (i in 1...nibs.length) {
+              var nib:String = nibs[i];
+              if (!dur_lookup.exists(nib)) {
+                dur_lookup.set(nib, dur_strings.length); 
+                dur_strings.push(nib);
+              }
+              var nibi:Int = dur_lookup.get(nib);
+              if (ptr.children==null) ptr.children = new IntMap<HierDur>();
+              if (!ptr.children.exists(nibi)) {
+                ptr.children.set(nibi, new HierDur());
+              }
+              ptr = ptr.children.get(nibi); 
+              ptr.total_time += self_time;
+              if (i==nibs.length-1) ptr.self_time += self_time;
+            }
+            if (dur_strings.length>start_len) {
+              send_message({non_frame:true, dur_strings:dur_strings.slice(start_len), inst_id:inst_id});
+            }
+          }
+
 					if (next_is_as || name.indexOf(".as.")==0) cur_frame.duration.as += self_time;
 					else if (name.indexOf(".gc.")==0) cur_frame.duration.gc += self_time;
 					else if (name.indexOf(".exit")==0) cur_frame.duration.other += self_time;
@@ -224,10 +259,10 @@ class FLMListener {
 	#end
 						//if (cur_frame.unknown_names.indexOf(data['name'])<0) cur_frame.unknown_names.push(data['name']);
 					}
-	 
+
 					// not sure should do it this way, maybe a list of event names instead?
-					next_is_as = name=='.as.event';
-	 
+					next_is_as = (amf_mode && name=='.as.event');
+
 				} else {
 					// Span shouldn't occur without a delta
 					if (data['span']!=null) throw( "Span without a delta on: "+data);
@@ -487,11 +522,13 @@ class Frame {
 #if DEBUG_UNKNOWN
   public var unknown_names:Array<String>;
 #end
-  public var timing:Timing;
+  public var timing:FrameTiming;
+  public var hierdur:HierDur;
 
   public function new(frame_id:Int, instance_id:Int, offset:Int=0) {
     inst_id = instance_id;
     id = frame_id;
+    hierdur = new HierDur();
     this.offset = offset;
     duration = {};
     duration.total = 0;

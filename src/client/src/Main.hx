@@ -530,6 +530,51 @@ class TracesTabularDataSource extends AbsTabularDataSource
   }
 }
 
+class GUIConst
+{
+  // Others mem keys seen:
+  // - bytearray.alchemy
+  // - bitmap.image
+  // - network
+  // - network.shared
+  // - bitmap.source
+
+  public static var mem_keys = ["total","used","managed.used","bitmap","bytearray","script","network","telemetry.overhead","managed","bitmap.display","bitmap.data"];
+  public static var mem_info = {
+    "managed.used":{ name:"ActionScript Objects", hxt_name:"Haxe Objects", color:0x227788 },
+    "bitmap":{ name:"Bitmap", color:0x22aa99 },
+    "telemetry.overhead":{ name:"Other", color:0x667755 },
+    "network":{ redirect:"telemetry.overhead" }, // Also 'other', Network Buffers
+    "script":{ name:"SWF Files", hxt_name:"Unexpected (SWF Files)", color:0x119944 },
+    "bytearray":{ name:"ByteArrays", hxt_name:"Unexpected (ByteArrays)", color:0x11bb66 }
+  }
+
+  public static var timing_keys = ["as", "rend", "net", "gc", "other"];
+  public static var timing_info = {
+    "as":{ name:"ActionScript", hxt_name:"User", color:0x2288cc },
+    "rend":{ name:"Rendering", color:0x66aa66 },
+    "net":{ name:"Network", color:0xcccc66 },
+    "gc":{ name:"Garbage Collection", color:0xdd5522 },
+    "other":{ name:"Other", color:0xaa4488 }
+  }
+
+  private static var __init:Bool = (function() {
+    Util.each(mem_info, function(k,v:Dynamic) { v.hxt_name = v.hxt_name==null ? v.name : v.hxt_name; });
+    Util.each(timing_info, function(k,v:Dynamic) { v.hxt_name = v.hxt_name==null ? v.name : v.hxt_name; });
+
+    // var s:StringMap<Int> = new StringMap<Int>();
+    // s.set("foo", 5);
+    // s.set("bar", 111);
+    // s.set("joe", 43);
+    // Util.each(s, function(s:String, i:Int):Void {
+    //   trace("s["+s+"] = "+i);
+    // });
+
+    return true;
+  })();
+}
+
+
 class FLMSession {
 
   public var frames:Array<FLMListener.Frame> = [];
@@ -541,6 +586,8 @@ class FLMSession {
   public var stack_maps:Array<Array<Int>> = new Array<Array<Int>>();
   public var ses_tile:Sprite;
   public var ui_state:UIState;
+
+  public var dur_strings:Array<String> = [];
 
   // Allocation IDs are actually, memory addresses, which can be reused,
   // so map them to guid's as soon as they arrive.
@@ -557,8 +604,9 @@ class FLMSession {
 
   public function receive_frame_data(data:Dynamic)
   {
-    if (data.session_name!=null) {
-      name = data.session_name;
+    if (data.non_frame) {
+      if (data.session_name!=null) name = data.session_name;
+      if (data.dur_strings!=null) dur_strings = dur_strings.concat(data.dur_strings);
       return; // Not really frame data...
     }
 
@@ -1066,7 +1114,7 @@ class HXScoutClientGUI extends Sprite
       var frame = session.frames[i];
 
       if (true) {
-        for (key in SelectionController.mem_keys) {
+        for (key in GUIConst.mem_keys) {
           if (frame.mem.exists(key)) {
             session.temp_running_mem.set(key, frame.mem.get(key));
           }
@@ -1077,12 +1125,28 @@ class HXScoutClientGUI extends Sprite
         //trace(frame.mem); // mem debug
       }
 
-      add_rect(i, timing_pane, frame.duration.total/layout.timing.scale, 0x444444, false);
-      add_rect(i, timing_pane, frame.duration.gc/layout.timing.scale, 0xdd5522, true);
-      add_rect(i, timing_pane, frame.duration.net/layout.timing.scale, 0xcccc66, true);
-      add_rect(i, timing_pane, frame.duration.other/layout.timing.scale, 0xaa4488, true);
-      add_rect(i, timing_pane, frame.duration.as/layout.timing.scale, 0x2288cc, true);
-      add_rect(i, timing_pane, frame.duration.rend/layout.timing.scale, 0x66aa66, true);
+      if (session.amf_mode) {
+        // FLM
+        add_rect(i, timing_pane, frame.duration.total/layout.timing.scale, 0x444444, false);
+        add_rect(i, timing_pane, frame.duration.gc/layout.timing.scale, 0xdd5522, true);
+        add_rect(i, timing_pane, frame.duration.net/layout.timing.scale, 0xcccc66, true);
+        add_rect(i, timing_pane, frame.duration.other/layout.timing.scale, 0xaa4488, true);
+        add_rect(i, timing_pane, frame.duration.as/layout.timing.scale, 0x2288cc, true);
+        add_rect(i, timing_pane, frame.duration.rend/layout.timing.scale, 0x66aa66, true);
+      } else {
+        add_rect(i, timing_pane, frame.duration.total/layout.timing.scale, 0x444444, false);
+        if (frame.hierdur!=null && frame.hierdur!=null && frame.hierdur.children!=null) {
+          var keys = frame.hierdur.children.keys();
+          // Timing roots
+          for (hidx in frame.hierdur.children.keys()) {
+            var name:String = session.dur_strings[hidx];
+            var time:Int = frame.hierdur.children.get(hidx).total_time;
+            var val = Reflect.field(GUIConst.timing_info, name);
+            var color:Int = val==null ? Std.random(0xffffff) : val.color;
+            add_rect(i, timing_pane, time/layout.timing.scale, color, true);
+          }
+        }
+      }
 
       var s = timing_shapes[Math.floor(i/16)];
       var m = new flash.geom.Matrix();
@@ -1436,47 +1500,6 @@ class SelectionController {
     redraw();
   }
 
-  // Others mem keys seen:
-  // - bytearray.alchemy
-  // - bitmap.image
-  // - network
-  // - network.shared
-  // - bitmap.source
-
-  public static var mem_keys = ["total","used","managed.used","bitmap","bytearray","script","network","telemetry.overhead","managed","bitmap.display","bitmap.data"];
-  private static var mem_info = {
-    "managed.used":{ name:"ActionScript Objects", hxt_name:"Haxe Objects", color:0x227788 },
-    "bitmap":{ name:"Bitmap", color:0x22aa99 },
-    "telemetry.overhead":{ name:"Other", color:0x667755 },
-    "network":{ redirect:"telemetry.overhead" }, // Also 'other', Network Buffers
-    "script":{ name:"SWF Files", hxt_name:"Unexpected (SWF Files)", color:0x119944 },
-    "bytearray":{ name:"ByteArrays", hxt_name:"Unexpected (ByteArrays)", color:0x11bb66 }
-  }
-
-  private static var timing_keys = ["as", "rend", "net", "gc", "other"];
-  private static var timing_info = {
-    "as":{ name:"ActionScript", hxt_name:"User", color:0x2288cc },
-    "rend":{ name:"Rendering", color:0x66aa66 },
-    "net":{ name:"Network", color:0xcccc66 },
-    "gc":{ name:"Garbage Collection", color:0xdd5522 },
-    "other":{ name:"Other", color:0xaa4488 }
-  }
-
-  private static var __init:Bool = (function() {
-    Util.each(mem_info, function(k,v:Dynamic) { v.hxt_name = v.hxt_name==null ? v.name : v.hxt_name; });
-    Util.each(timing_info, function(k,v:Dynamic) { v.hxt_name = v.hxt_name==null ? v.name : v.hxt_name; });
-
-    // var s:StringMap<Int> = new StringMap<Int>();
-    // s.set("foo", 5);
-    // s.set("bar", 111);
-    // s.set("joe", 43);
-    // Util.each(s, function(s:String, i:Int):Void {
-    //   trace("s["+s+"] = "+i);
-    // });
-
-    return true;
-  })();
-
   private var _prof_sort_self:Bool = false;
   public function handle_sort_self(e:Event=null):Void { _prof_sort_self = true; redraw(); }
   public function handle_sort_total(e:Event=null):Void { _prof_sort_self = false; redraw(); }
@@ -1545,22 +1568,23 @@ class SelectionController {
 
     // - - - - - - - - - - -
     // - - Summary pane - -
-    // - - - - - - - - - -
+    // - - - - - - - - - - -
     var total = 0;
     var active = 0;
+    var hd = new FLMListener.HierDur();
     var durations = new StringMap<Int>();
     var mem = new StringMap<Int>();
     var mem_used = 0;
     each_frame(function(f) {
       total += f.duration.total;
-      for (key in timing_keys) {
+      for (key in GUIConst.timing_keys) {
         if (!durations.exists(key)) durations.set(key, 0);
         var val = Reflect.field(f.duration, key);
         durations.set(key, durations.get(key)+val);
         active += val;
       }
-      for (key in mem_keys) {
-        var info = Reflect.field(mem_info, key);
+      for (key in GUIConst.mem_keys) {
+        var info = Reflect.field(GUIConst.mem_info, key);
         var val = f.mem.get(key);
         if (info!=null && Reflect.hasField(info, "redirect")) {
           key = Reflect.field(info, "redirect");
@@ -1648,25 +1672,37 @@ class SelectionController {
     ttxt.x = ftxt.x + 30 - ttxt.width;
     summary_pane.cont.addChild(ttxt);
 
+    // Timing labels
     var y:Float = tlbl.y + tlbl.height;
-    for (key in timing_keys) {
-      var val = Reflect.field(timing_info, key);
-      var albl = Util.make_label(session.amf_mode ? val.name : val.hxt_name, 12, val.color);
+    function draw_timing_row(y, lbl, color, value:Float):Float {
+      var albl = Util.make_label(lbl, 12, color);
       albl.y = y;
       albl.x = 20;
       summary_pane.cont.addChild(albl);
-      var aval = Util.make_label(Util.add_commas(Math.floor(durations.get(key)/1000))+"", 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
+      var aval = Util.make_label(Util.add_commas(Math.floor(value/1000))+"", 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
       aval.y = albl.y;
       aval.x = ftxt.x + 30 - aval.width;
       summary_pane.cont.addChild(aval);
-
+ 
       summary_pane.cont.graphics.beginFill(0xffffff, 0.07);
       summary_pane.cont.graphics.drawRect(10, albl.y, summary_pane.innerWidth-20, albl.height-1);
-      summary_pane.cont.graphics.beginFill(val.color);
+      summary_pane.cont.graphics.beginFill(color);
       summary_pane.cont.graphics.drawRect(10, albl.y, 5, albl.height-1);
-      summary_pane.cont.graphics.drawRect(ftxt.x + 35, albl.y, ((summary_pane.innerWidth-20)-(ftxt.x + 35))/active*durations.get(key), albl.height-1);
-      y += albl.height;
+      summary_pane.cont.graphics.drawRect(ftxt.x + 35, albl.y, ((summary_pane.innerWidth-20)-(ftxt.x + 35))/active*value, albl.height-1);
+      return albl.height;
     }
+
+    //if (session.amf_mode) {
+      for (key in GUIConst.timing_keys) {
+        var val = Reflect.field(GUIConst.timing_info, key);
+        y += draw_timing_row(y, val.name, val.color, durations.get(key));
+      }
+    //} else {
+    //  for (key in GUIConst.timing_keys) {
+    //    var val = Reflect.field(GUIConst.timing_info, key);
+    //    y += draw_timing_row(y, val.name, val.color);
+    //  }
+    //}
 
     // Memory summary
     var ttlbl = Util.make_label("Average Total Mem", 12, 0x777777);
@@ -1690,8 +1726,8 @@ class SelectionController {
     summary_pane.cont.addChild(ttxt);
 
     var y:Float = tlbl.y + tlbl.height;
-    for (key in mem_keys) {
-      var val = Reflect.field(mem_info, key);
+    for (key in GUIConst.mem_keys) {
+      var val = Reflect.field(GUIConst.mem_info, key);
       if (val==null) continue; // total and used are not in info
       if (Reflect.hasField(val, "redirect")) continue;
       var albl = Util.make_label(session.amf_mode ? val.name : val.hxt_name, 12, val.color);

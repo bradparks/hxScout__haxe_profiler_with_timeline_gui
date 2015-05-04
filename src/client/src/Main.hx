@@ -587,7 +587,7 @@ class FLMSession {
   public var ses_tile:Sprite;
   public var ui_state:UIState;
 
-  public var dur_strings:Array<String> = [];
+  public var dur_strings:Array<String> = ["root"];
 
   // Allocation IDs are actually, memory addresses, which can be reused,
   // so map them to guid's as soon as they arrive.
@@ -1125,28 +1125,28 @@ class HXScoutClientGUI extends Sprite
         //trace(frame.mem); // mem debug
       }
 
-      if (session.amf_mode) {
-        // FLM
-        add_rect(i, timing_pane, frame.duration.total/layout.timing.scale, 0x444444, false);
-        add_rect(i, timing_pane, frame.duration.gc/layout.timing.scale, 0xdd5522, true);
-        add_rect(i, timing_pane, frame.duration.net/layout.timing.scale, 0xcccc66, true);
-        add_rect(i, timing_pane, frame.duration.other/layout.timing.scale, 0xaa4488, true);
-        add_rect(i, timing_pane, frame.duration.as/layout.timing.scale, 0x2288cc, true);
-        add_rect(i, timing_pane, frame.duration.rend/layout.timing.scale, 0x66aa66, true);
-      } else {
-        add_rect(i, timing_pane, frame.duration.total/layout.timing.scale, 0x444444, false);
-        if (frame.hierdur!=null && frame.hierdur!=null && frame.hierdur.children!=null) {
-          var keys = frame.hierdur.children.keys();
-          // Timing roots
-          for (hidx in frame.hierdur.children.keys()) {
-            var name:String = session.dur_strings[hidx];
-            var time:Int = frame.hierdur.children.get(hidx).total_time;
-            var val = Reflect.field(GUIConst.timing_info, name);
-            var color:Int = val==null ? Std.random(0xffffff) : val.color;
-            add_rect(i, timing_pane, time/layout.timing.scale, color, true);
+      //if (session.amf_mode) {
+      //  // FLM
+      //  add_rect(i, timing_pane, frame.duration.total/layout.timing.scale, 0x444444, false);
+      //  add_rect(i, timing_pane, frame.duration.gc/layout.timing.scale, 0xdd5522, true);
+      //  add_rect(i, timing_pane, frame.duration.net/layout.timing.scale, 0xcccc66, true);
+      //  add_rect(i, timing_pane, frame.duration.other/layout.timing.scale, 0xaa4488, true);
+      //  add_rect(i, timing_pane, frame.duration.as/layout.timing.scale, 0x2288cc, true);
+      //  add_rect(i, timing_pane, frame.duration.rend/layout.timing.scale, 0x66aa66, true);
+      //} else {
+          add_rect(i, timing_pane, frame.duration / layout.timing.scale, 0x444444, false);
+          if (frame.hierdur!=null && frame.hierdur!=null && frame.hierdur.children!=null) {
+            var keys = frame.hierdur.children.keys();
+            // Timing roots
+            for (hidx in frame.hierdur.children.keys()) {
+              var name:String = session.dur_strings[hidx];
+              var time:Int = frame.hierdur.children.get(hidx).total_time;
+              var val = Reflect.field(GUIConst.timing_info, name);
+              var color:Int = val==null ? Std.random(0xffffff) : val.color;
+              add_rect(i, timing_pane, time/layout.timing.scale, color, true);
+            }
           }
-        }
-      }
+      //}
 
       var s = timing_shapes[Math.floor(i/16)];
       var m = new flash.geom.Matrix();
@@ -1571,17 +1571,21 @@ class SelectionController {
     // - - - - - - - - - - -
     var total = 0;
     var active = 0;
-    var hd = new FLMListener.HierDur();
-    var durations = new StringMap<Int>();
+    var durations = new FLMListener.HierDur();
     var mem = new StringMap<Int>();
     var mem_used = 0;
-    each_frame(function(f) {
-      total += f.duration.total;
-      for (key in GUIConst.timing_keys) {
-        if (!durations.exists(key)) durations.set(key, 0);
-        var val = Reflect.field(f.duration, key);
-        durations.set(key, durations.get(key)+val);
-        active += val;
+    each_frame(function(f:FLMListener.Frame) {
+      total += f.duration;
+
+      if (f.hierdur!=null && f.hierdur!=null && f.hierdur.children!=null) {
+        FLMListener.HierDur.merge_timing(f.hierdur, durations);
+        //trace_hd(durations, 0, 0);
+        FLMListener.HierDur.calc_totals(durations, 0, session.dur_strings);
+        // Calc active time
+        for (hidx in f.hierdur.children.keys()) {
+          active += f.hierdur.children.get(hidx).total_time;
+        }
+        //trace_hd(durations, 0, 0);
       }
       for (key in GUIConst.mem_keys) {
         var info = Reflect.field(GUIConst.mem_info, key);
@@ -1635,7 +1639,7 @@ class SelectionController {
     tlbl.x = lbl.x + lbl.width*1.3;
     summary_pane.cont.addChild(tlbl);
 
-    var t = Util.time_format(frame.offset)+" - "+Util.time_format(end_frame.offset+end_frame.duration.total);
+    var t = Util.time_format(frame.offset)+" - "+Util.time_format(end_frame.offset+end_frame.duration);
     var ttxt = Util.make_label(t, 12, 0xeeeeee, -1, "DroidSans-Bold.ttf");
     ttxt.y = tlbl.y;
     ttxt.x = ftxt.x;
@@ -1673,7 +1677,6 @@ class SelectionController {
     summary_pane.cont.addChild(ttxt);
 
     // Timing labels
-    var y:Float = tlbl.y + tlbl.height;
     function draw_timing_row(y, lbl, color, value:Float):Float {
       var albl = Util.make_label(lbl, 12, color);
       albl.y = y;
@@ -1692,16 +1695,28 @@ class SelectionController {
       return albl.height;
     }
 
+    var y:Float = tlbl.y + tlbl.height;
     //if (session.amf_mode) {
-      for (key in GUIConst.timing_keys) {
-        var val = Reflect.field(GUIConst.timing_info, key);
-        y += draw_timing_row(y, val.name, val.color, durations.get(key));
-      }
+    //for (key in GUIConst.timing_keys) {
+    //  var val = Reflect.field(GUIConst.timing_info, key);
+    //  y += draw_timing_row(y, val.name, val.color, durations.get(key));
+    //}
     //} else {
-    //  for (key in GUIConst.timing_keys) {
-    //    var val = Reflect.field(GUIConst.timing_info, key);
-    //    y += draw_timing_row(y, val.name, val.color);
-    //  }
+    var last_color:Int = 0;
+    function recurse_hd(display_hd:FLMListener.HierDur, hidx:Int=0, depth:Int=0) {
+      if (hidx>0) {
+        var name:String = session.dur_strings[hidx];
+        //trace("display_hd "+name+", self="+display_hd.self_time+", total="+display_hd.total_time);
+        var val = Reflect.field(GUIConst.timing_info, name);
+        var color:Int = val==null ? (depth==1 ? 0xff0000 : last_color) : val.color;
+        y += draw_timing_row(y, val==null ? name : val.name, color, display_hd.total_time);
+        last_color = color;
+      }
+      for (hidx in display_hd.children.keys()) {
+        recurse_hd(display_hd.children.get(hidx), hidx, depth+1);
+      }
+    }
+    recurse_hd(durations, 0, 0);
     //}
 
     // Memory summary
@@ -1751,10 +1766,10 @@ class SelectionController {
     // - - Samples pane - -
     // - - - - - - - - - - - - - - -
     var sample_data = new SampleData();
-    var total:Float = 0;
+    //var total:Float = 0;
     each_frame(function(f) {
       if (f.prof_top_down!=null) SampleData.merge_sample_data(sample_data, f.prof_top_down);
-      total += f.duration.as/1000;
+      //total += f.duration.as/1000;
     });
 
     cast(sample_pane.data_source, SamplesTabularDataSource).update_sample_data(sample_data, session);

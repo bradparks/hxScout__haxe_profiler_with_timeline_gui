@@ -11,7 +11,45 @@ class HierDur {
   public var self_time:Int;
   public var total_time:Int;
   public var children:IntMap<HierDur>;
-  public function new() { }
+  public function new() { self_time = 0; total_time = 0; children = new IntMap<HierDur>(); }
+
+  public function ensure_child(hidx:Int):HierDur {
+    if (!children.exists(hidx)) {
+      children.set(hidx, new FLMListener.HierDur());
+    }
+    return children.get(hidx);
+  }
+
+  public static function merge_timing(src:FLMListener.HierDur, tgt:FLMListener.HierDur):Void {
+    tgt.self_time += src.self_time;
+    tgt.total_time = 0;
+    for (hidx in src.children.keys()) {
+      merge_timing(src.children.get(hidx), tgt.ensure_child(hidx));
+    }
+  }
+
+  public static function calc_totals(hd:FLMListener.HierDur, hidx:Int, dur_strings:Array<String>):Int {
+    var name = dur_strings[hidx];
+    var total:Int = hd.self_time;
+    var nc:Int = 0;
+    hd.total_time = hd.self_time;
+    for (hidx in hd.children.keys()) {
+      var time = calc_totals(hd.children.get(hidx), hidx, dur_strings);
+      hd.total_time += time;
+      nc++;
+    }
+    return hd.total_time;
+  }
+
+  static public function trace_hd(display_hd:FLMListener.HierDur, hidx:Int, depth:Int, dur_strings:Array<String>) {
+    var name:String = dur_strings[hidx];
+    var sp:String = ""; for (i in 0...depth) { sp += "|  "; }
+    trace(sp+name+": [self="+display_hd.self_time+", total="+display_hd.total_time+"]");
+    for (hidx in display_hd.children.keys()) {
+      trace_hd(display_hd.children.get(hidx), hidx, depth+1, dur_strings);
+    }
+  }
+
 }
 
 typedef FrameTiming = {
@@ -63,7 +101,7 @@ class FLMListener {
     var flm_socket : Socket = s.accept();
     var inst_id:Int = (next_inst_id++);
 
-    var dur_strings:Array<String> = [];
+    var dur_strings:Array<String> = ["root"];
     var dur_lookup:StringMap<Int> = new StringMap<Int>();
 
     // Are we supposed to close the "parent" socket?
@@ -185,12 +223,12 @@ class FLMListener {
 					// Delta without a span implies span = 0 ?
 					var t:FrameTiming = { delta:data['delta'], span:data['span']==null?0:data['span'], prev:null, self_time:0 };
 	 
-					cur_frame.duration.total += t.delta;
+					cur_frame.duration += t.delta;
 	 
-					if (t.span>cur_frame.duration.total) {
+					if (t.span>cur_frame.duration) {
 						if (!amf_mode || (name!='.network.localconnection.idle' &&
                               name!='.rend.screen')) {
-							trace("??? Event larger ("+t.span+") than current frame ("+cur_frame.duration.total+"): "+data);
+							trace("??? Event larger ("+t.span+") than current frame ("+cur_frame.duration+"): "+data);
 						}
 					}
 
@@ -219,46 +257,44 @@ class FLMListener {
 					//if (next_is_as) trace("next_is_as on: "+name);
 
           // Hierarchical timing
-          if (!amf_mode) {
-            var start_len = dur_strings.length;
-            var nibs:Array<String> = name.split(".");
-            var ptr:HierDur = cur_frame.hierdur;
-            for (i in 1...nibs.length) {
-              var nib:String = nibs[i];
-              if (!dur_lookup.exists(nib)) {
-                dur_lookup.set(nib, dur_strings.length); 
-                dur_strings.push(nib);
-              }
-              var nibi:Int = dur_lookup.get(nib);
-              if (ptr.children==null) ptr.children = new IntMap<HierDur>();
-              if (!ptr.children.exists(nibi)) {
-                ptr.children.set(nibi, new HierDur());
-              }
-              ptr = ptr.children.get(nibi); 
-              ptr.total_time += self_time;
-              if (i==nibs.length-1) ptr.self_time += self_time;
-            }
-            if (dur_strings.length>start_len) {
-              send_message({non_frame:true, dur_strings:dur_strings.slice(start_len), inst_id:inst_id});
-            }
-          }
-
-					if (next_is_as || name.indexOf(".as.")==0) cur_frame.duration.as += self_time;
-					else if (name.indexOf(".gc.")==0) cur_frame.duration.gc += self_time;
-					else if (name.indexOf(".exit")==0) cur_frame.duration.other += self_time;
-					else if (name.indexOf(".rend.")==0) cur_frame.duration.rend += self_time;
-					else if (name.indexOf(".other.")==0) cur_frame.duration.other += self_time;
-					else if (name.indexOf(".swf.")==0) cur_frame.duration.other += self_time;
-					else if (name.indexOf(".network.")==0) cur_frame.duration.net += self_time;
-					else {
-						cur_frame.duration.other += self_time;
-						cur_frame.duration.unknown += self_time;
-	#if DEBUG_UNKNOWN
-						var debug:String = data['name']+":"+self_time;
-						cur_frame.unknown_names.push(debug);
-	#end
-						//if (cur_frame.unknown_names.indexOf(data['name'])<0) cur_frame.unknown_names.push(data['name']);
+          var start_len = dur_strings.length;
+          var nibs:Array<String> = name.split(".");
+					var ptr:HierDur = cur_frame.hierdur;
+          if (amf_mode && next_is_as) nibs[1] = "as";
+					for (i in 1...(amf_mode ? 2 : nibs.length)) {
+						var nib:String = nibs[i];
+						if (!dur_lookup.exists(nib)) {
+							dur_lookup.set(nib, dur_strings.length);
+							dur_strings.push(nib);
+						}
+						var nibi:Int = dur_lookup.get(nib);
+						if (!ptr.children.exists(nibi)) {
+							ptr.children.set(nibi, new HierDur());
+						}
+						ptr = ptr.children.get(nibi);
+						ptr.total_time += self_time;
+						if (i==nibs.length-1) ptr.self_time += self_time;
 					}
+					if (dur_strings.length>start_len) {
+						send_message({non_frame:true, dur_strings:dur_strings.slice(start_len), inst_id:inst_id});
+					}
+
+					// if (next_is_as || name.indexOf(".as.")==0) cur_frame.duration.as += self_time;
+					// else if (name.indexOf(".gc.")==0) cur_frame.duration.gc += self_time;
+					// else if (name.indexOf(".exit")==0) cur_frame.duration.other += self_time;
+					// else if (name.indexOf(".rend.")==0) cur_frame.duration.rend += self_time;
+					// else if (name.indexOf(".other.")==0) cur_frame.duration.other += self_time;
+					// else if (name.indexOf(".swf.")==0) cur_frame.duration.other += self_time;
+					// else if (name.indexOf(".network.")==0) cur_frame.duration.net += self_time;
+					// else {
+					//   cur_frame.duration.other += self_time;
+					//   cur_frame.duration.unknown += self_time;
+	#if DEBU// G_UNKNOWN
+					//   var debug:String = data['name']+":"+self_time;
+					//   cur_frame.unknown_names.push(debug);
+	#end    //  
+					//   //if (cur_frame.unknown_names.indexOf(data['name'])<0) cur_frame.unknown_names.push(data['name']);
+					// }
 
 					// not sure should do it this way, maybe a list of event names instead?
 					next_is_as = (amf_mode && name=='.as.event');
@@ -321,7 +357,7 @@ class FLMListener {
 				}
 
 				if (name==".enter") {
-					var offset = cur_frame.offset + cur_frame.duration.total;
+					var offset = cur_frame.offset + cur_frame.duration;
 					cur_frame.timing = null; // release timing events
 					//Sys.stdout().writeString(cur_frame.to_json()+",\n");
 					send_message(cur_frame);
@@ -501,7 +537,7 @@ class Frame {
   public var inst_id:Int;
   public var id:Int;
   public var offset:Int;
-  public var duration:Dynamic;
+  public var duration:Int;
   public var mem:Map<String, Int>;
   public var samples:Array<SampleRaw>;
   public var push_stack_strings:Array<String>;
@@ -530,15 +566,7 @@ class Frame {
     id = frame_id;
     hierdur = new HierDur();
     this.offset = offset;
-    duration = {};
-    duration.total = 0;
-    duration.as = 0;
-    duration.gc = 0;
-    duration.other = 0;
-    duration.net = 0;
-    duration.rend = 0;
-    duration.swf = 0;
-    duration.unknown = 0;
+    duration = 0;
     mem = new Map<String, Int>();
     samples = null;
     push_stack_strings = null;

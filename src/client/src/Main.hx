@@ -194,6 +194,7 @@ class Main extends Sprite {
   }
 
   function setup_hxt_debug_output() {
+#if telemetry
     var output_port:Int = (Sys.args().length>0 && Sys.args().indexOf('-d')>=0) ? Std.parseInt(Sys.args()[(Sys.args().indexOf('-d')+1)]) : -1;
     if (output_port>0) {
       trace("Will send telemetry on port "+output_port);
@@ -203,6 +204,7 @@ class Main extends Sprite {
       cfg.app_name = "HxScout";
       var hxt = new hxtelemetry.HxTelemetry(cfg);
     }
+#end
   }
 
 #end
@@ -976,10 +978,10 @@ class HXScoutClientGUI extends Sprite
 
     addChild(detail_pane);
 
-    detail_pane.add_pane(measurements_pane);
     detail_pane.add_pane(sample_pane);
     detail_pane.add_pane(alloc_pane);
     detail_pane.add_pane(dealloc_pane);
+    detail_pane.add_pane(measurements_pane);
     detail_pane.add_pane(trace_pane);
     detail_pane.select_tab(0);
 

@@ -111,6 +111,7 @@ class FLMListener {
     s = null;
 
     // Optional hxt output
+#if telemetry
     var hxts:Float = 0.0;
     var hxt:hxtelemetry.HxTelemetry = null;
     if (output_port>0) {
@@ -123,6 +124,7 @@ class FLMListener {
       cfg.auto_event_loop = false;
       hxt = new hxtelemetry.HxTelemetry(cfg);
     }
+#end
 
     // Launch next listener
     var listener = Thread.create(FLMListener.start);
@@ -521,10 +523,13 @@ class FLMListener {
         throw e;
       }
 
+#if telemetry
       if (hxt!=null && openfl.Lib.getTimer()-hxts > 30) {
         hxts = openfl.Lib.getTimer();
         hxt.advance_frame();
       }
+#end
+
       if (data!=null) handle_data(data);
 
     } // while (connected)

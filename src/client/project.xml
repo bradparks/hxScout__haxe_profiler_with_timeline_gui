@@ -3,10 +3,17 @@
 
   <meta title="hxScout" package="com.jcward.hxscout.gui" version="1.0.0" company="Jeff Ward" />
   <app main="Main" file="hxScoutMain" />
-  <app path="export/legacy/debug" if="legacy debug" />
-  <app path="export/legacy/release" if="legacy release" />
-  <app path="export/next/debug" if="debug" unless="legacy" />
-  <app path="export/next/release" if="release" unless="legacy" />
+
+  <app path="export/legacy_debug_telemetry" if="legacy debug telemetry" />
+  <app path="export/legacy_release_telemetry" if="legacy release telemetry" />
+  <app path="export/next_debug_telemetry" if="debug telemetry" unless="legacy" />
+  <app path="export/next_release_telemetry" if="release telemetry" unless="legacy" />
+
+  <app path="export/legacy_debug_notelemetry" if="legacy debug" unless="telemetry"/>
+  <app path="export/legacy_release_notelemetry" if="legacy release" unless="telemetry"/>
+  <app path="export/next_debug_notelemetry" if="debug" unless="legacy || telemetry" />
+  <app path="export/next_release_notelemetry" if="release" unless="legacy || telemetry" />
+
   <window width="1280" height="1024" background="#333333" resizable="true" fps="30" hardware="true" vsync="true"  />
 
   <source path="src" />
@@ -20,9 +27,9 @@
   <haxelib name="actuate" />
 
   <!-- for debug telemetry -->
-  <haxelib name="hxtelemetry" />
-  <haxedef name="HXCPP_STACK_TRACE" />
-  <haxedef name="HXCPP_TELEMETRY" />
+  <haxelib name="hxtelemetry" if="telemetry"/>
+  <haxedef name="HXCPP_STACK_TRACE" if="telemetry"/>
+  <haxedef name="HXCPP_TELEMETRY" if="telemetry"/>
 
   <assets path="assets" rename="assets" exclude="*.svg" />
   <icon path="assets/hxScout.svg" />

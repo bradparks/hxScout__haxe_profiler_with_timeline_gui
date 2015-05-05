@@ -7,46 +7,48 @@ import haxe.io.*;
 import haxe.ds.StringMap;
 import haxe.ds.IntMap;
 
-class HierDur {
+class TimingData {
   public var self_time:Int;
   public var total_time:Int;
-  public var children:IntMap<HierDur>;
-  public function new() { self_time = 0; total_time = 0; children = new IntMap<HierDur>(); }
+  public var count:Int;
+  public var children:IntMap<TimingData>;
+  public function new() { self_time = 0; total_time = 0; count = 0; children = new IntMap<TimingData>(); }
 
-  public function ensure_child(hidx:Int):HierDur {
+  public function ensure_child(hidx:Int):TimingData {
     if (!children.exists(hidx)) {
-      children.set(hidx, new FLMListener.HierDur());
+      children.set(hidx, new FLMListener.TimingData());
     }
     return children.get(hidx);
   }
 
-  public static function merge_timing(src:FLMListener.HierDur, tgt:FLMListener.HierDur):Void {
+  public static function merge_timing(src:FLMListener.TimingData, tgt:FLMListener.TimingData):Void {
     tgt.self_time += src.self_time;
+    tgt.count += src.count;
     tgt.total_time = 0;
     for (hidx in src.children.keys()) {
       merge_timing(src.children.get(hidx), tgt.ensure_child(hidx));
     }
   }
 
-  public static function calc_totals(hd:FLMListener.HierDur, hidx:Int, dur_strings:Array<String>):Int {
-    var name = dur_strings[hidx];
+  public static function calc_totals(hd:FLMListener.TimingData, hidx:Int, timing_strings:Array<String>):Int {
+    var name = timing_strings[hidx];
     var total:Int = hd.self_time;
     var nc:Int = 0;
     hd.total_time = hd.self_time;
     for (hidx in hd.children.keys()) {
-      var time = calc_totals(hd.children.get(hidx), hidx, dur_strings);
+      var time = calc_totals(hd.children.get(hidx), hidx, timing_strings);
       hd.total_time += time;
       nc++;
     }
     return hd.total_time;
   }
 
-  static public function trace_hd(display_hd:FLMListener.HierDur, hidx:Int, depth:Int, dur_strings:Array<String>) {
-    var name:String = dur_strings[hidx];
+  static public function trace_hd(display_hd:FLMListener.TimingData, hidx:Int, depth:Int, timing_strings:Array<String>) {
+    var name:String = timing_strings[hidx];
     var sp:String = ""; for (i in 0...depth) { sp += "|  "; }
     trace(sp+name+": [self="+display_hd.self_time+", total="+display_hd.total_time+"]");
     for (hidx in display_hd.children.keys()) {
-      trace_hd(display_hd.children.get(hidx), hidx, depth+1, dur_strings);
+      trace_hd(display_hd.children.get(hidx), hidx, depth+1, timing_strings);
     }
   }
 
@@ -101,7 +103,7 @@ class FLMListener {
     var flm_socket : Socket = s.accept();
     var inst_id:Int = (next_inst_id++);
 
-    var dur_strings:Array<String> = ["root"];
+    var timing_strings:Array<String> = ["root"];
     var dur_lookup:StringMap<Int> = new StringMap<Int>();
 
     // Are we supposed to close the "parent" socket?
@@ -224,7 +226,8 @@ class FLMListener {
 					var t:FrameTiming = { delta:data['delta'], span:data['span']==null?0:data['span'], prev:null, self_time:0 };
 	 
 					cur_frame.duration += t.delta;
-	 
+          var count = data['count']==null ? 1 : data['count'];
+
 					if (t.span>cur_frame.duration) {
 						if (!amf_mode || (name!='.network.localconnection.idle' &&
                               name!='.rend.screen')) {
@@ -257,26 +260,29 @@ class FLMListener {
 					//if (next_is_as) trace("next_is_as on: "+name);
 
           // Hierarchical timing
-          var start_len = dur_strings.length;
+          var start_len = timing_strings.length;
           var nibs:Array<String> = name.split(".");
-					var ptr:HierDur = cur_frame.hierdur;
+					var ptr:TimingData = cur_frame.timing_data;
           if (amf_mode && next_is_as) nibs[1] = "as";
 					for (i in 1...(amf_mode ? 2 : nibs.length)) {
 						var nib:String = nibs[i];
 						if (!dur_lookup.exists(nib)) {
-							dur_lookup.set(nib, dur_strings.length);
-							dur_strings.push(nib);
+							dur_lookup.set(nib, timing_strings.length);
+							timing_strings.push(nib);
 						}
 						var nibi:Int = dur_lookup.get(nib);
 						if (!ptr.children.exists(nibi)) {
-							ptr.children.set(nibi, new HierDur());
+							ptr.children.set(nibi, new TimingData());
 						}
 						ptr = ptr.children.get(nibi);
 						ptr.total_time += self_time;
-						if (i==nibs.length-1) ptr.self_time += self_time;
+						if (i==nibs.length-1) {
+              ptr.self_time += self_time;
+              ptr.count += count;
+            }
 					}
-					if (dur_strings.length>start_len) {
-						send_message({non_frame:true, dur_strings:dur_strings.slice(start_len), inst_id:inst_id});
+					if (timing_strings.length>start_len) {
+						send_message({non_frame:true, timing_strings:timing_strings.slice(start_len), inst_id:inst_id});
 					}
 
 					// if (next_is_as || name.indexOf(".as.")==0) cur_frame.duration.as += self_time;
@@ -559,12 +565,12 @@ class Frame {
   public var unknown_names:Array<String>;
 #end
   public var timing:FrameTiming;
-  public var hierdur:HierDur;
+  public var timing_data:TimingData;
 
   public function new(frame_id:Int, instance_id:Int, offset:Int=0) {
     inst_id = instance_id;
     id = frame_id;
-    hierdur = new HierDur();
+    timing_data = new TimingData();
     this.offset = offset;
     duration = 0;
     mem = new Map<String, Int>();

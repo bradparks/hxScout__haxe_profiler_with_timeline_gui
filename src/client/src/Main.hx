@@ -530,6 +530,70 @@ class TracesTabularDataSource extends AbsTabularDataSource
   }
 }
 
+class TimingTabularDataSource extends AbsTabularDataSource
+{
+  private var _session:FLMSession;
+
+  public function new() {
+    super();
+  }
+
+  private var _rows:Array<FLMListener.TimingData>;
+  private var _depth:Array<Int>;
+  private var _names:Array<Int>;
+  public function update_timing_data(roots:IntMap<FLMListener.TimingData>, session:FLMSession):Void
+  {
+    _session = session;
+
+    _rows = [];
+    _depth = [];
+    _names = [];
+    function recurse(roots:IntMap<FLMListener.TimingData>, depth:Int):Void
+    {
+      var keys = roots.keys();
+      for (type_id in keys) {
+        var td:FLMListener.TimingData = roots.get(type_id);
+        _rows.push(td);
+        _depth.push(depth);
+        _names.push(type_id);
+        recurse(td.children, depth+1);
+      }
+    }
+    recurse(roots, 0);
+  }
+
+  private static var labels:Array<String> = ["Self Time (ms)", "Total Time (ms)", "Count"];
+  override public function get_labels():Array<String> { return labels; }
+
+  override public function get_num_rows():Int
+  {
+    return _rows==null ? 0 : _rows.length;
+  }
+
+  override public function get_num_cols():Int { return 3; }
+
+  override public function get_indent(row_idx:Int):Int
+  {
+    return _depth[row_idx];
+  }
+
+  override public function get_row_value(row_idx:Int, col_idx:Int):Float
+  {
+    switch (col_idx) {
+      case 0: { return _rows[row_idx].self_time/1000; }
+      case 1: { return _rows[row_idx].total_time/1000; }
+      case 2: { return _rows[row_idx].count; }
+    }
+    return 0;
+  }
+
+  override public function get_row_name(row_idx:Int):String
+  {
+    return _session.timing_strings[_names[row_idx]];
+  }
+}
+
+
 class GUIConst
 {
   // Others mem keys seen:
@@ -587,7 +651,7 @@ class FLMSession {
   public var ses_tile:Sprite;
   public var ui_state:UIState;
 
-  public var dur_strings:Array<String> = ["root"];
+  public var timing_strings:Array<String> = ["root"];
 
   // Allocation IDs are actually, memory addresses, which can be reused,
   // so map them to guid's as soon as they arrive.
@@ -606,7 +670,7 @@ class FLMSession {
   {
     if (data.non_frame) {
       if (data.session_name!=null) name = data.session_name;
-      if (data.dur_strings!=null) dur_strings = dur_strings.concat(data.dur_strings);
+      if (data.timing_strings!=null) timing_strings = timing_strings.concat(data.timing_strings);
       return; // Not really frame data...
     }
 
@@ -846,6 +910,7 @@ class HXScoutClientGUI extends Sprite
   private var alloc_pane:TabularDataPane;
   private var dealloc_pane:TabularDataPane;
   private var trace_pane:TabularDataPane;
+  private var measurements_pane:TabularDataPane;
 
   private var active_session = -1;
   private var last_frame_drawn = -1;
@@ -858,6 +923,7 @@ class HXScoutClientGUI extends Sprite
   public var allocs_data_source:AllocsTabularDataSource;
   public var deallocs_data_source:DeallocsTabularDataSource;
   public var traces_data_source:TracesTabularDataSource;
+  public var timing_data_source:TimingTabularDataSource;
 
   public function new()
   {
@@ -869,6 +935,12 @@ class HXScoutClientGUI extends Sprite
     memory_pane = new Pane(true);
     session_pane = new Pane(false, false, true); // scrolly
     detail_pane = new TabbedPane();
+
+    timing_data_source = new TimingTabularDataSource();
+    measurements_pane = new TabularDataPane(timing_data_source);
+    measurements_pane.outline = 0;
+    measurements_pane.outline_alpha = 0.75;
+    measurements_pane.name = "Measurements";
 
     samples_data_source = new SamplesTabularDataSource();
     sample_pane = new TabularDataPane(samples_data_source);
@@ -904,13 +976,14 @@ class HXScoutClientGUI extends Sprite
 
     addChild(detail_pane);
 
+    detail_pane.add_pane(measurements_pane);
     detail_pane.add_pane(sample_pane);
     detail_pane.add_pane(alloc_pane);
     detail_pane.add_pane(dealloc_pane);
     detail_pane.add_pane(trace_pane);
     detail_pane.select_tab(0);
 
-    sel_ctrl = new SelectionController(nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, dealloc_pane, trace_pane, summary_pane, layout, get_active_session);
+    sel_ctrl = new SelectionController(nav_pane, measurements_pane, timing_pane, memory_pane, sample_pane, alloc_pane, dealloc_pane, trace_pane, summary_pane, layout, get_active_session);
     nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane, sel_ctrl, layout, get_active_session, function() { return layout.frame_width/nav_scalex; }, function() { var tmp = active_session; set_active_session(-1); set_active_session(tmp); });
 
     addEventListener(Event.ENTER_FRAME, on_enter_frame);
@@ -1135,12 +1208,12 @@ class HXScoutClientGUI extends Sprite
       //  add_rect(i, timing_pane, frame.duration.rend/layout.timing.scale, 0x66aa66, true);
       //} else {
           add_rect(i, timing_pane, frame.duration / layout.timing.scale, 0x444444, false);
-          if (frame.hierdur!=null && frame.hierdur!=null && frame.hierdur.children!=null) {
-            var keys = frame.hierdur.children.keys();
+          if (frame.timing_data!=null && frame.timing_data!=null && frame.timing_data.children!=null) {
+            var keys = frame.timing_data.children.keys();
             // Timing roots
-            for (hidx in frame.hierdur.children.keys()) {
-              var name:String = session.dur_strings[hidx];
-              var time:Int = frame.hierdur.children.get(hidx).total_time;
+            for (hidx in frame.timing_data.children.keys()) {
+              var name:String = session.timing_strings[hidx];
+              var time:Int = frame.timing_data.children.get(hidx).total_time;
               var val = Reflect.field(GUIConst.timing_info, name);
               var color:Int = val==null ? Std.random(0xffffff) : val.color;
               add_rect(i, timing_pane, time/layout.timing.scale, color, true);
@@ -1401,6 +1474,7 @@ class NavController {
 
 class SelectionController {
   private var nav_pane:Pane;
+  private var measurements_pane:TabularDataPane;
   private var timing_pane:Pane;
   private var memory_pane:Pane;
   private var sample_pane:TabularDataPane;
@@ -1417,10 +1491,11 @@ class SelectionController {
   public var start_sel:Int;
   public var end_sel:Int;
 
-  public function new (nav_pane, timing_pane, memory_pane, sample_pane, alloc_pane, dealloc_pane, trace_pane, summary_pane, layout,
+  public function new (nav_pane, measurements_pane, timing_pane, memory_pane, sample_pane, alloc_pane, dealloc_pane, trace_pane, summary_pane, layout,
                        get_active_session):Void
   {
     this.nav_pane = nav_pane;
+    this.measurements_pane = measurements_pane;
     this.timing_pane = timing_pane;
     this.memory_pane = memory_pane;
     this.sample_pane = sample_pane;
@@ -1571,19 +1646,19 @@ class SelectionController {
     // - - - - - - - - - - -
     var total = 0;
     var active = 0;
-    var durations = new FLMListener.HierDur();
+    var durations = new FLMListener.TimingData();
     var mem = new StringMap<Int>();
     var mem_used = 0;
     each_frame(function(f:FLMListener.Frame) {
       total += f.duration;
 
-      if (f.hierdur!=null && f.hierdur!=null && f.hierdur.children!=null) {
-        FLMListener.HierDur.merge_timing(f.hierdur, durations);
+      if (f.timing_data!=null && f.timing_data!=null && f.timing_data.children!=null) {
+        FLMListener.TimingData.merge_timing(f.timing_data, durations);
         //trace_hd(durations, 0, 0);
-        FLMListener.HierDur.calc_totals(durations, 0, session.dur_strings);
+        FLMListener.TimingData.calc_totals(durations, 0, session.timing_strings);
         // Calc active time
-        for (hidx in f.hierdur.children.keys()) {
-          active += f.hierdur.children.get(hidx).total_time;
+        for (hidx in f.timing_data.children.keys()) {
+          active += f.timing_data.children.get(hidx).total_time;
         }
         //trace_hd(durations, 0, 0);
       }
@@ -1703,9 +1778,9 @@ class SelectionController {
     //}
     //} else {
     var last_color:Int = 0;
-    function recurse_hd(display_hd:FLMListener.HierDur, hidx:Int=0, depth:Int=0) {
+    function recurse_hd(display_hd:FLMListener.TimingData, hidx:Int=0, depth:Int=0) {
       if (hidx>0) {
-        var name:String = session.dur_strings[hidx];
+        var name:String = session.timing_strings[hidx];
         //trace("display_hd "+name+", self="+display_hd.self_time+", total="+display_hd.total_time);
         var val = Reflect.field(GUIConst.timing_info, name);
         var color:Int = val==null ? (depth==1 ? 0xff0000 : last_color) : val.color;
@@ -1718,6 +1793,9 @@ class SelectionController {
     }
     recurse_hd(durations, 0, 0);
     //}
+
+    cast(measurements_pane.data_source, TimingTabularDataSource).update_timing_data(durations.children, session);
+    measurements_pane.redraw();
 
     // Memory summary
     var ttlbl = Util.make_label("Average Total Mem", 12, 0x777777);

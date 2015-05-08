@@ -27,7 +27,7 @@
   <haxelib name="actuate" />
 
   <!-- for debug telemetry -->
-  <haxelib name="hxtelemetry" if="telemetry"/>
+  <haxelib name="hxtelemetry" />
   <haxedef name="HXCPP_STACK_TRACE" if="telemetry"/>
   <haxedef name="HXCPP_TELEMETRY" if="telemetry"/>
 

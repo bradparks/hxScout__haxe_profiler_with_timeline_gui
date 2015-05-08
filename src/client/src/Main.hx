@@ -540,21 +540,21 @@ class TimingTabularDataSource extends AbsTabularDataSource
     super();
   }
 
-  private var _rows:Array<FLMListener.TimingData>;
+  private var _rows:Array<FLMListener.ActivityData>;
   private var _depth:Array<Int>;
   private var _names:Array<Int>;
-  public function update_timing_data(roots:IntMap<FLMListener.TimingData>, session:FLMSession):Void
+  public function update_timing_data(roots:IntMap<FLMListener.ActivityData>, session:FLMSession):Void
   {
     _session = session;
 
     _rows = [];
     _depth = [];
     _names = [];
-    function recurse(roots:IntMap<FLMListener.TimingData>, depth:Int):Void
+    function recurse(roots:IntMap<FLMListener.ActivityData>, depth:Int):Void
     {
       var keys = roots.keys();
       for (type_id in keys) {
-        var td:FLMListener.TimingData = roots.get(type_id);
+        var td:FLMListener.ActivityData = roots.get(type_id);
         _rows.push(td);
         _depth.push(depth);
         _names.push(type_id);
@@ -591,53 +591,8 @@ class TimingTabularDataSource extends AbsTabularDataSource
 
   override public function get_row_name(row_idx:Int):String
   {
-    return _session.timing_strings[_names[row_idx]];
+    return _session.get_activity_descriptor(_session.timing_strings[_names[row_idx]]).description;
   }
-}
-
-
-class GUIConst
-{
-  // Others mem keys seen:
-  // - bytearray.alchemy
-  // - bitmap.image
-  // - network
-  // - network.shared
-  // - bitmap.source
-
-  public static var mem_keys = ["total","used","managed.used","bitmap","bytearray","script","network","telemetry.overhead","managed","bitmap.display","bitmap.data"];
-  public static var mem_info = {
-    "managed.used":{ name:"ActionScript Objects", hxt_name:"Haxe Objects", color:0x227788 },
-    "bitmap":{ name:"Bitmap", color:0x22aa99 },
-    "telemetry.overhead":{ name:"Other", color:0x667755 },
-    "network":{ redirect:"telemetry.overhead" }, // Also 'other', Network Buffers
-    "script":{ name:"SWF Files", hxt_name:"Unexpected (SWF Files)", color:0x119944 },
-    "bytearray":{ name:"ByteArrays", hxt_name:"Unexpected (ByteArrays)", color:0x11bb66 }
-  }
-
-  public static var timing_keys = ["as", "rend", "net", "gc", "other"];
-  public static var timing_info = {
-    "as":{ name:"ActionScript", hxt_name:"User", color:0x2288cc },
-    "rend":{ name:"Rendering", color:0x66aa66 },
-    "net":{ name:"Network", color:0xcccc66 },
-    "gc":{ name:"Garbage Collection", color:0xdd5522 },
-    "other":{ name:"Other", color:0xaa4488 }
-  }
-
-  private static var __init:Bool = (function() {
-    Util.each(mem_info, function(k,v:Dynamic) { v.hxt_name = v.hxt_name==null ? v.name : v.hxt_name; });
-    Util.each(timing_info, function(k,v:Dynamic) { v.hxt_name = v.hxt_name==null ? v.name : v.hxt_name; });
-
-    // var s:StringMap<Int> = new StringMap<Int>();
-    // s.set("foo", 5);
-    // s.set("bar", 111);
-    // s.set("joe", 43);
-    // Util.each(s, function(s:String, i:Int):Void {
-    //   trace("s["+s+"] = "+i);
-    // });
-
-    return true;
-  })();
 }
 
 
@@ -662,16 +617,38 @@ class FLMSession {
   public var alloc_id_to_guid:IntMap<Int> = new IntMap<Int>();
   public var alloc_guid_to_newalloc:IntMap<FLMListener.NewAlloc> = new IntMap<FLMListener.NewAlloc>();
 
+  public var hxt_activity_descriptors:StringMap<hxtelemetry.HxTelemetry.ActivityDescriptor>;
+
   public function new(iid:String)
   {
     inst_id = iid;
     name = inst_id;
   }
 
+  public function get_activity_descriptor(name:String):hxtelemetry.HxTelemetry.ActivityDescriptor
+  {
+    if (amf_mode) return Reflect.field(FLMConst.timing_info, name);
+    var val:hxtelemetry.HxTelemetry.ActivityDescriptor = hxt_activity_descriptors.get(name);
+    if (val==null) {
+      val = { name:name, description:name, color:Std.random(0xffffff) };
+      hxt_activity_descriptors.set(name, val);
+    }
+    return val;
+  }
+
   public function receive_frame_data(data:Dynamic)
   {
     if (data.non_frame) {
-      if (data.session_name!=null) name = data.session_name;
+      if (data.session_name!=null) {
+        name = data.session_name;
+        var activity_descriptors:Array<hxtelemetry.HxTelemetry.ActivityDescriptor> = haxe.Unserializer.run(data.activity_descriptors);
+        //trace("Got activity_descriptors:");
+        //trace(activity_descriptors);
+        hxt_activity_descriptors = new StringMap<hxtelemetry.HxTelemetry.ActivityDescriptor>();
+        for (desc in activity_descriptors) {
+          hxt_activity_descriptors.set(desc.name.substr(1), desc);
+        }
+      }
       if (data.timing_strings!=null) timing_strings = timing_strings.concat(data.timing_strings);
       return; // Not really frame data...
     }
@@ -912,7 +889,7 @@ class HXScoutClientGUI extends Sprite
   private var alloc_pane:TabularDataPane;
   private var dealloc_pane:TabularDataPane;
   private var trace_pane:TabularDataPane;
-  private var measurements_pane:TabularDataPane;
+  private var activities_pane:TabularDataPane;
 
   private var active_session = -1;
   private var last_frame_drawn = -1;
@@ -939,10 +916,10 @@ class HXScoutClientGUI extends Sprite
     detail_pane = new TabbedPane();
 
     timing_data_source = new TimingTabularDataSource();
-    measurements_pane = new TabularDataPane(timing_data_source);
-    measurements_pane.outline = 0;
-    measurements_pane.outline_alpha = 0.75;
-    measurements_pane.name = "Measurements";
+    activities_pane = new TabularDataPane(timing_data_source);
+    activities_pane.outline = 0;
+    activities_pane.outline_alpha = 0.75;
+    activities_pane.name = "Activities";
 
     samples_data_source = new SamplesTabularDataSource();
     sample_pane = new TabularDataPane(samples_data_source);
@@ -981,11 +958,11 @@ class HXScoutClientGUI extends Sprite
     detail_pane.add_pane(sample_pane);
     detail_pane.add_pane(alloc_pane);
     detail_pane.add_pane(dealloc_pane);
-    detail_pane.add_pane(measurements_pane);
+    detail_pane.add_pane(activities_pane);
     detail_pane.add_pane(trace_pane);
     detail_pane.select_tab(0);
 
-    sel_ctrl = new SelectionController(nav_pane, measurements_pane, timing_pane, memory_pane, sample_pane, alloc_pane, dealloc_pane, trace_pane, summary_pane, layout, get_active_session);
+    sel_ctrl = new SelectionController(nav_pane, activities_pane, timing_pane, memory_pane, sample_pane, alloc_pane, dealloc_pane, trace_pane, summary_pane, layout, get_active_session);
     nav_ctrl = new NavController(nav_pane, timing_pane, memory_pane, sel_ctrl, layout, get_active_session, function() { return layout.frame_width/nav_scalex; }, function() { var tmp = active_session; set_active_session(-1); set_active_session(tmp); });
 
     addEventListener(Event.ENTER_FRAME, on_enter_frame);
@@ -1189,7 +1166,7 @@ class HXScoutClientGUI extends Sprite
       var frame = session.frames[i];
 
       if (true) {
-        for (key in GUIConst.mem_keys) {
+        for (key in FLMConst.mem_keys) {
           if (frame.mem.exists(key)) {
             session.temp_running_mem.set(key, frame.mem.get(key));
           }
@@ -1216,9 +1193,8 @@ class HXScoutClientGUI extends Sprite
             for (hidx in frame.timing_data.children.keys()) {
               var name:String = session.timing_strings[hidx];
               var time:Int = frame.timing_data.children.get(hidx).total_time;
-              var val = Reflect.field(GUIConst.timing_info, name);
-              var color:Int = val==null ? Std.random(0xffffff) : val.color;
-              add_rect(i, timing_pane, time/layout.timing.scale, color, true);
+              var val = session.get_activity_descriptor(name);
+              add_rect(i, timing_pane, time/layout.timing.scale, val.color, true);
             }
           }
       //}
@@ -1476,7 +1452,7 @@ class NavController {
 
 class SelectionController {
   private var nav_pane:Pane;
-  private var measurements_pane:TabularDataPane;
+  private var activities_pane:TabularDataPane;
   private var timing_pane:Pane;
   private var memory_pane:Pane;
   private var sample_pane:TabularDataPane;
@@ -1493,11 +1469,11 @@ class SelectionController {
   public var start_sel:Int;
   public var end_sel:Int;
 
-  public function new (nav_pane, measurements_pane, timing_pane, memory_pane, sample_pane, alloc_pane, dealloc_pane, trace_pane, summary_pane, layout,
+  public function new (nav_pane, activities_pane, timing_pane, memory_pane, sample_pane, alloc_pane, dealloc_pane, trace_pane, summary_pane, layout,
                        get_active_session):Void
   {
     this.nav_pane = nav_pane;
-    this.measurements_pane = measurements_pane;
+    this.activities_pane = activities_pane;
     this.timing_pane = timing_pane;
     this.memory_pane = memory_pane;
     this.sample_pane = sample_pane;
@@ -1648,24 +1624,24 @@ class SelectionController {
     // - - - - - - - - - - -
     var total = 0;
     var active = 0;
-    var durations = new FLMListener.TimingData();
+    var durations = new FLMListener.ActivityData();
     var mem = new StringMap<Int>();
     var mem_used = 0;
     each_frame(function(f:FLMListener.Frame) {
       total += f.duration;
 
       if (f.timing_data!=null && f.timing_data!=null && f.timing_data.children!=null) {
-        FLMListener.TimingData.merge_timing(f.timing_data, durations);
+        FLMListener.ActivityData.merge_timing(f.timing_data, durations);
         //trace_hd(durations, 0, 0);
-        FLMListener.TimingData.calc_totals(durations, 0, session.timing_strings);
+        FLMListener.ActivityData.calc_totals(durations, 0, session.timing_strings);
         // Calc active time
         for (hidx in f.timing_data.children.keys()) {
           active += f.timing_data.children.get(hidx).total_time;
         }
         //trace_hd(durations, 0, 0);
       }
-      for (key in GUIConst.mem_keys) {
-        var info = Reflect.field(GUIConst.mem_info, key);
+      for (key in FLMConst.mem_keys) {
+        var info = Reflect.field(FLMConst.mem_info, key);
         var val = f.mem.get(key);
         if (info!=null && Reflect.hasField(info, "redirect")) {
           key = Reflect.field(info, "redirect");
@@ -1774,20 +1750,19 @@ class SelectionController {
 
     var y:Float = tlbl.y + tlbl.height;
     //if (session.amf_mode) {
-    //for (key in GUIConst.timing_keys) {
-    //  var val = Reflect.field(GUIConst.timing_info, key);
+    //for (key in FLMConst.timing_keys) {
+    //  var val = Reflect.field(FLMConst.timing_info, key);
     //  y += draw_timing_row(y, val.name, val.color, durations.get(key));
     //}
     //} else {
     var last_color:Int = 0;
-    function recurse_hd(display_hd:FLMListener.TimingData, hidx:Int=0, depth:Int=0) {
+    function recurse_hd(display_hd:FLMListener.ActivityData, hidx:Int=0, depth:Int=0) {
       if (hidx>0) {
         var name:String = session.timing_strings[hidx];
         //trace("display_hd "+name+", self="+display_hd.self_time+", total="+display_hd.total_time);
-        var val = Reflect.field(GUIConst.timing_info, name);
-        var color:Int = val==null ? (depth==1 ? 0xff0000 : last_color) : val.color;
-        y += draw_timing_row(y, val==null ? name : val.name, color, display_hd.total_time);
-        last_color = color;
+        var val = session.get_activity_descriptor(name);
+        y += draw_timing_row(y, val==null ? name : val.description, val.color, display_hd.total_time);
+        last_color = val.color;
       }
       for (hidx in display_hd.children.keys()) {
         recurse_hd(display_hd.children.get(hidx), hidx, depth+1);
@@ -1796,8 +1771,8 @@ class SelectionController {
     recurse_hd(durations, 0, 0);
     //}
 
-    cast(measurements_pane.data_source, TimingTabularDataSource).update_timing_data(durations.children, session);
-    measurements_pane.redraw();
+    cast(activities_pane.data_source, TimingTabularDataSource).update_timing_data(durations.children, session);
+    activities_pane.redraw();
 
     // Memory summary
     var ttlbl = Util.make_label("Average Total Mem", 12, 0x777777);
@@ -1821,11 +1796,11 @@ class SelectionController {
     summary_pane.cont.addChild(ttxt);
 
     var y:Float = tlbl.y + tlbl.height;
-    for (key in GUIConst.mem_keys) {
-      var val = Reflect.field(GUIConst.mem_info, key);
+    for (key in FLMConst.mem_keys) {
+      var val = Reflect.field(FLMConst.mem_info, key);
       if (val==null) continue; // total and used are not in info
       if (Reflect.hasField(val, "redirect")) continue;
-      var albl = Util.make_label(session.amf_mode ? val.name : val.hxt_name, 12, val.color);
+      var albl = Util.make_label(val.description, 12, val.color);
       albl.y = y;
       albl.x = 20;
       summary_pane.cont.addChild(albl);

@@ -7,21 +7,21 @@ import haxe.io.*;
 import haxe.ds.StringMap;
 import haxe.ds.IntMap;
 
-class TimingData {
+class ActivityData {
   public var self_time:Int;
   public var total_time:Int;
   public var count:Int;
-  public var children:IntMap<TimingData>;
-  public function new() { self_time = 0; total_time = 0; count = 0; children = new IntMap<TimingData>(); }
+  public var children:IntMap<ActivityData>;
+  public function new() { self_time = 0; total_time = 0; count = 0; children = new IntMap<ActivityData>(); }
 
-  public function ensure_child(hidx:Int):TimingData {
+  public function ensure_child(hidx:Int):ActivityData {
     if (!children.exists(hidx)) {
-      children.set(hidx, new FLMListener.TimingData());
+      children.set(hidx, new FLMListener.ActivityData());
     }
     return children.get(hidx);
   }
 
-  public static function merge_timing(src:FLMListener.TimingData, tgt:FLMListener.TimingData):Void {
+  public static function merge_timing(src:FLMListener.ActivityData, tgt:FLMListener.ActivityData):Void {
     tgt.self_time += src.self_time;
     tgt.count += src.count;
     tgt.total_time = 0;
@@ -30,7 +30,7 @@ class TimingData {
     }
   }
 
-  public static function calc_totals(hd:FLMListener.TimingData, hidx:Int, timing_strings:Array<String>):Int {
+  public static function calc_totals(hd:FLMListener.ActivityData, hidx:Int, timing_strings:Array<String>):Int {
     var name = timing_strings[hidx];
     var total:Int = hd.self_time;
     var nc:Int = 0;
@@ -43,7 +43,7 @@ class TimingData {
     return hd.total_time;
   }
 
-  static public function trace_hd(display_hd:FLMListener.TimingData, hidx:Int, depth:Int, timing_strings:Array<String>) {
+  static public function trace_hd(display_hd:FLMListener.ActivityData, hidx:Int, depth:Int, timing_strings:Array<String>) {
     var name:String = timing_strings[hidx];
     var sp:String = ""; for (i in 0...depth) { sp += "|  "; }
     trace(sp+name+": [self="+display_hd.self_time+", total="+display_hd.total_time+"]");
@@ -121,7 +121,6 @@ class FLMListener {
       cfg.port = output_port;
       cfg.app_name = "HxScout-FLMListener-"+inst_id;
       cfg.singleton_instance = false;
-      cfg.auto_event_loop = false;
       hxt = new hxtelemetry.HxTelemetry(cfg);
     }
 #end
@@ -212,7 +211,7 @@ class FLMListener {
 				//}
 	 
 				if (name=='.swf.name') {
-					send_message({non_frame:true, session_name:data['value'], inst_id:inst_id, amf_mode:amf_mode});
+					send_message({non_frame:true, session_name:data['value'], inst_id:inst_id, amf_mode:amf_mode, "activity_descriptors":data['activity_descriptors']});
 				}
 
 				if (name=='.trace') {
@@ -264,7 +263,7 @@ class FLMListener {
           // Hierarchical timing
           var start_len = timing_strings.length;
           var nibs:Array<String> = name.split(".");
-					var ptr:TimingData = cur_frame.timing_data;
+					var ptr:ActivityData = cur_frame.timing_data;
           if (amf_mode && next_is_as) nibs[1] = "as";
 					for (i in 1...(amf_mode ? 2 : nibs.length)) {
 						var nib:String = nibs[i];
@@ -274,7 +273,7 @@ class FLMListener {
 						}
 						var nibi:Int = dur_lookup.get(nib);
 						if (!ptr.children.exists(nibi)) {
-							ptr.children.set(nibi, new TimingData());
+							ptr.children.set(nibi, new ActivityData());
 						}
 						ptr = ptr.children.get(nibi);
 						ptr.total_time += self_time;
@@ -570,12 +569,12 @@ class Frame {
   public var unknown_names:Array<String>;
 #end
   public var timing:FrameTiming;
-  public var timing_data:TimingData;
+  public var timing_data:ActivityData;
 
   public function new(frame_id:Int, instance_id:Int, offset:Int=0) {
     inst_id = instance_id;
     id = frame_id;
-    timing_data = new TimingData();
+    timing_data = new ActivityData();
     this.offset = offset;
     duration = 0;
     mem = new Map<String, Int>();

@@ -1177,27 +1177,17 @@ class HXScoutClientGUI extends Sprite
         //trace(frame.mem); // mem debug
       }
 
-      //if (session.amf_mode) {
-      //  // FLM
-      //  add_rect(i, timing_pane, frame.duration.total/layout.timing.scale, 0x444444, false);
-      //  add_rect(i, timing_pane, frame.duration.gc/layout.timing.scale, 0xdd5522, true);
-      //  add_rect(i, timing_pane, frame.duration.net/layout.timing.scale, 0xcccc66, true);
-      //  add_rect(i, timing_pane, frame.duration.other/layout.timing.scale, 0xaa4488, true);
-      //  add_rect(i, timing_pane, frame.duration.as/layout.timing.scale, 0x2288cc, true);
-      //  add_rect(i, timing_pane, frame.duration.rend/layout.timing.scale, 0x66aa66, true);
-      //} else {
-          add_rect(i, timing_pane, frame.duration / layout.timing.scale, 0x444444, false);
-          if (frame.timing_data!=null && frame.timing_data!=null && frame.timing_data.children!=null) {
-            var keys = frame.timing_data.children.keys();
-            // Timing roots
-            for (hidx in frame.timing_data.children.keys()) {
-              var name:String = session.timing_strings[hidx];
-              var time:Int = frame.timing_data.children.get(hidx).total_time;
-              var val = session.get_activity_descriptor(name);
-              add_rect(i, timing_pane, time/layout.timing.scale, val.color, true);
-            }
-          }
-      //}
+      add_rect(i, timing_pane, frame.duration / layout.timing.scale, 0x444444, false);
+      if (frame.timing_data!=null && frame.timing_data!=null && frame.timing_data.children!=null) {
+        var keys = frame.timing_data.children.keys();
+        // Timing roots
+        for (hidx in frame.timing_data.children.keys()) {
+          var name:String = session.timing_strings[hidx];
+          var time:Int = frame.timing_data.children.get(hidx).total_time;
+          var val = session.get_activity_descriptor(name);
+          add_rect(i, timing_pane, time/layout.timing.scale, val.color, true);
+        }
+      }
 
       var s = timing_shapes[Math.floor(i/16)];
       var m = new flash.geom.Matrix();

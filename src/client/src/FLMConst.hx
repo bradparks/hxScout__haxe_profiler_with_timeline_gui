@@ -27,34 +27,21 @@ class FLMConst
     "bytearray":{ description:"ByteArrays", color:0x11bb66 }
   }
 
-    public static var timing_keys:Array<String> = ["as", "rend", "net", "gc", "other"];
-  public static var timing_info:Array<hxtelemetry.HxTelemetry.ActivityDescriptor> = [];
+  public static var timing_keys:Array<String> = ["as", "rend", "net", "gc", "other"];
+  public static var timing_info:StringMap<hxtelemetry.HxTelemetry.ActivityDescriptor> =
+    new StringMap<hxtelemetry.HxTelemetry.ActivityDescriptor>();
   private static var __init:Bool = (function() {
     Util.each([
-        {name:"as", description:"ActionScript", color:0x2288cc },
-        {name:"rend", description:"Rendering", color:0x66aa66 },
-        {name:"net", description:"Network", color:0xcccc66 },
-        {name:"gc", description:"Garbage Collection", color:0xdd5522 },
-        {name:"other", description:"Other", color:0xaa4488 }
-      ], function(v:Dynamic) {
-                var ad:hxtelemetry.HxTelemetry.ActivityDescriptor = v;
-                timing_info.push(ad);
-              });
+      {name:"as", description:"ActionScript", color:0x2288cc },
+      {name:"rend", description:"Rendering", color:0x66aa66 },
+      {name:"net", description:"Network", color:0xcccc66 },
+      {name:"gc", description:"Garbage Collection", color:0xdd5522 },
+      {name:"other", description:"Other", color:0xaa4488 }
+    ],
+    function(v:Dynamic) {
+      var ad:hxtelemetry.HxTelemetry.ActivityDescriptor = v;
+      timing_info.set(ad.name, ad);
+    });
     return true;
   })();
-
-  // private static var __init:Bool = (function() {
-  //   Util.each(mem_info, function(k,v:Dynamic) { v.hxt_name = v.hxt_name==null ? v.name : v.hxt_name; });
-  //   Util.each(timing_info, function(k,v:Dynamic) { v.hxt_name = v.hxt_name==null ? v.name : v.hxt_name; });
-  //  
-  //   // var s:StringMap<Int> = new StringMap<Int>();
-  //   // s.set("foo", 5);
-  //   // s.set("bar", 111);
-  //   // s.set("joe", 43);
-  //   // Util.each(s, function(s:String, i:Int):Void {
-  //   //   trace("s["+s+"] = "+i);
-  //   // });
-  //  
-  //   return true;
-  // })();
 }

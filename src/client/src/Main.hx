@@ -591,7 +591,10 @@ class TimingTabularDataSource extends AbsTabularDataSource
 
   override public function get_row_name(row_idx:Int):String
   {
-    return _session.get_activity_descriptor(_session.timing_strings[_names[row_idx]]).description;
+    var name:String = _session.timing_strings[_names[row_idx]];
+    var ad:hxtelemetry.HxTelemetry.ActivityDescriptor = _session.get_activity_descriptor(name);
+    if (ad==null) return name;
+    return ad.description;
   }
 }
 
@@ -610,6 +613,12 @@ class FLMSession {
 
   public var timing_strings:Array<String> = ["root"];
 
+  // TODO: make mem hierarchical like timing/activity?
+  public static var hxt_mem_keys:Array<String> = ["total", "used"];
+  public static var hxt_mem_info = {
+    "used":{ description:"GC Memory Used", color:0x227788 }
+  }
+
   // Allocation IDs are actually, memory addresses, which can be reused,
   // so map them to guid's as soon as they arrive.
   private var alloc_guid:Int = 1;
@@ -627,7 +636,9 @@ class FLMSession {
 
   public function get_activity_descriptor(name:String):hxtelemetry.HxTelemetry.ActivityDescriptor
   {
-    if (amf_mode) return Reflect.field(FLMConst.timing_info, name);
+    if (amf_mode) {
+      return FLMConst.timing_info.get(name);
+    }
     var val:hxtelemetry.HxTelemetry.ActivityDescriptor = hxt_activity_descriptors.get(name);
     if (val==null) {
       val = { name:name, description:name, color:Std.random(0xffffff) };
@@ -641,12 +652,14 @@ class FLMSession {
     if (data.non_frame) {
       if (data.session_name!=null) {
         name = data.session_name;
-        var activity_descriptors:Array<hxtelemetry.HxTelemetry.ActivityDescriptor> = haxe.Unserializer.run(data.activity_descriptors);
-        //trace("Got activity_descriptors:");
-        //trace(activity_descriptors);
-        hxt_activity_descriptors = new StringMap<hxtelemetry.HxTelemetry.ActivityDescriptor>();
-        for (desc in activity_descriptors) {
-          hxt_activity_descriptors.set(desc.name.substr(1), desc);
+        if (data.activity_descriptors!=null) {
+          var activity_descriptors:Array<hxtelemetry.HxTelemetry.ActivityDescriptor> = haxe.Unserializer.run(data.activity_descriptors);
+          //trace("Got activity_descriptors:");
+          //trace(activity_descriptors);
+          hxt_activity_descriptors = new StringMap<hxtelemetry.HxTelemetry.ActivityDescriptor>();
+          for (desc in activity_descriptors) {
+            hxt_activity_descriptors.set(desc.name.substr(1), desc);
+          }
         }
       }
       if (data.timing_strings!=null) timing_strings = timing_strings.concat(data.timing_strings);
@@ -1166,7 +1179,7 @@ class HXScoutClientGUI extends Sprite
       var frame = session.frames[i];
 
       if (true) {
-        for (key in FLMConst.mem_keys) {
+        for (key in session.amf_mode ? FLMConst.mem_keys : FLMSession.hxt_mem_keys) {
           if (frame.mem.exists(key)) {
             session.temp_running_mem.set(key, frame.mem.get(key));
           }
@@ -1184,8 +1197,10 @@ class HXScoutClientGUI extends Sprite
         for (hidx in frame.timing_data.children.keys()) {
           var name:String = session.timing_strings[hidx];
           var time:Int = frame.timing_data.children.get(hidx).total_time;
-          var val = session.get_activity_descriptor(name);
-          add_rect(i, timing_pane, time/layout.timing.scale, val.color, true);
+          var val:hxtelemetry.HxTelemetry.ActivityDescriptor = session.get_activity_descriptor(name);
+          if (val!=null) {
+            add_rect(i, timing_pane, time/layout.timing.scale, val.color, true);
+          }
         }
       }
 
@@ -1204,12 +1219,16 @@ class HXScoutClientGUI extends Sprite
 
       //trace(session.temp_running_mem); // mem debug
 
-      add_rect(i, memory_pane, session.temp_running_mem.get("total")/layout.mscale, 0x444444, false);             // Current Total Memory
-      add_rect(i, memory_pane, session.temp_running_mem.get("telemetry.overhead")/layout.mscale, 0x667755, true); // In other?
-      add_rect(i, memory_pane, session.temp_running_mem.get("script")/layout.mscale, 0x119944, true); // In other?
-      add_rect(i, memory_pane, session.temp_running_mem.get("bytearray")/layout.mscale, 0x11cc77, true); // In other?
-      add_rect(i, memory_pane, session.temp_running_mem.get("bitmap")/layout.mscale, 0x22aa99, true);             // TODO: category
-      add_rect(i, memory_pane, session.temp_running_mem.get("managed.used")/layout.mscale, 0x227788, true);       // ActionScript Objects
+      add_rect(i, memory_pane, session.temp_running_mem.get("total")/layout.mscale, 0x444444, false); // Current Total Memory
+      if (session.amf_mode) {
+        add_rect(i, memory_pane, session.temp_running_mem.get("telemetry.overhead")/layout.mscale, 0x667755, true); // In other?
+        add_rect(i, memory_pane, session.temp_running_mem.get("script")/layout.mscale, 0x119944, true); // In other?
+        add_rect(i, memory_pane, session.temp_running_mem.get("bytearray")/layout.mscale, 0x11cc77, true); // In other?
+        add_rect(i, memory_pane, session.temp_running_mem.get("bitmap")/layout.mscale, 0x22aa99, true);             // TODO: category
+        add_rect(i, memory_pane, session.temp_running_mem.get("managed.used")/layout.mscale, 0x227788, true);       // ActionScript Objects
+      } else {
+        add_rect(i, memory_pane, session.temp_running_mem.get("used")/layout.mscale, 0x227788, true);
+      }
     }
     last_frame_drawn = session.frames.length-1;
 
@@ -1630,8 +1649,8 @@ class SelectionController {
         }
         //trace_hd(durations, 0, 0);
       }
-      for (key in FLMConst.mem_keys) {
-        var info = Reflect.field(FLMConst.mem_info, key);
+      for (key in session.amf_mode ? FLMConst.mem_keys : FLMSession.hxt_mem_keys) {
+        var info = Reflect.field(session.amf_mode ? FLMConst.mem_info : FLMSession.hxt_mem_info, key);
         var val = f.mem.get(key);
         if (info!=null && Reflect.hasField(info, "redirect")) {
           key = Reflect.field(info, "redirect");
@@ -1739,27 +1758,22 @@ class SelectionController {
     }
 
     var y:Float = tlbl.y + tlbl.height;
-    //if (session.amf_mode) {
-    //for (key in FLMConst.timing_keys) {
-    //  var val = Reflect.field(FLMConst.timing_info, key);
-    //  y += draw_timing_row(y, val.name, val.color, durations.get(key));
-    //}
-    //} else {
     var last_color:Int = 0;
     function recurse_hd(display_hd:FLMListener.ActivityData, hidx:Int=0, depth:Int=0) {
       if (hidx>0) {
         var name:String = session.timing_strings[hidx];
         //trace("display_hd "+name+", self="+display_hd.self_time+", total="+display_hd.total_time);
         var val = session.get_activity_descriptor(name);
-        y += draw_timing_row(y, val==null ? name : val.description, val.color, display_hd.total_time);
-        last_color = val.color;
+        if (val!=null) {
+          y += draw_timing_row(y, val==null ? name : val.description, val.color, display_hd.total_time);
+          last_color = val.color;
+        }
       }
       for (hidx in display_hd.children.keys()) {
         recurse_hd(display_hd.children.get(hidx), hidx, depth+1);
       }
     }
     recurse_hd(durations, 0, 0);
-    //}
 
     cast(activities_pane.data_source, TimingTabularDataSource).update_timing_data(durations.children, session);
     activities_pane.redraw();
@@ -1786,11 +1800,11 @@ class SelectionController {
     summary_pane.cont.addChild(ttxt);
 
     var y:Float = tlbl.y + tlbl.height;
-    for (key in FLMConst.mem_keys) {
-      var val = Reflect.field(FLMConst.mem_info, key);
-      if (val==null) continue; // total and used are not in info
-      if (Reflect.hasField(val, "redirect")) continue;
-      var albl = Util.make_label(val.description, 12, val.color);
+    for (key in session.amf_mode ? FLMConst.mem_keys : FLMSession.hxt_mem_keys) {
+      var info:Dynamic = Reflect.field(session.amf_mode ? FLMConst.mem_info : FLMSession.hxt_mem_info, key);
+      if (info==null) continue; // total and used are not in info
+      if (Reflect.hasField(info, "redirect")) continue;
+      var albl = Util.make_label(info.description, 12, info.color);
       albl.y = y;
       albl.x = 20;
       summary_pane.cont.addChild(albl);
@@ -1801,7 +1815,7 @@ class SelectionController {
 
       summary_pane.cont.graphics.beginFill(0xffffff, 0.07);
       summary_pane.cont.graphics.drawRect(10, albl.y, summary_pane.innerWidth-20, albl.height-1);
-      summary_pane.cont.graphics.beginFill(val.color);
+      summary_pane.cont.graphics.beginFill(info.color);
       summary_pane.cont.graphics.drawRect(10, albl.y, 5, albl.height-1);
       summary_pane.cont.graphics.drawRect(ftxt.x + 35, albl.y, ((summary_pane.innerWidth-20)-(ftxt.x + 35))/mem.get("used")*mem.get(key), albl.height-1);
       y += albl.height;

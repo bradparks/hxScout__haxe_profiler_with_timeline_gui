@@ -11,7 +11,7 @@
 
   <p>
     <a href="https://raw.githubusercontent.com/jcward/hxScout/master/hxscout.png"><img class="screenshot" src="hxscout_sm.png"/></a>
-    hxScout currently supports profiling Haxe C++ applications (targetting Windows, Mac OS X, Linux, Android, iOS, and more.) The application under test simply includes the hxtelemetry library, which sends telemetry data to hxScout over a socket, allowing for both local (e.g. same computer) and remote (e.g. android phone) profiling.
+    hxScout currently supports profiling Haxe C++ applications (targetting Windows, Mac OS X, Linux, Android, iOS, and more.) The application under test (AUT) simply includes the hxtelemetry library, which sends telemetry data to hxScout over a socket, allowing for both local (e.g. same computer) and remote (e.g. android phone) profiling.
   </p>
 
   <h2>Beta Status</h2>
@@ -31,9 +31,15 @@
     If changing your haxe environment is too much hassle, you can download and try
     a compiled demo application, just to see how profiling works. Availalble for
     <a href="hxtelemetry_test-win.zip" onclick="ga('send', 'event', 'download-test', 'win');">windows</a>,
-    <a href="hxtelemetry_test-mac.tgz" onclick="ga('send', 'event', 'download-test', 'mac');">mac</a>,
+    <a href="hxtelemetry_test-mac.tgz" onclick="ga('send', 'event', 'download-test', 'mac');">mac</a>, and
     <a href="hxtelemetry_test-linux.tgz" onclick="ga('send', 'event', 'download-test', 'linux');">linux</a>.
   </p>
+
+  <p>
+Simply launch hxScout, then launch the AUT. If telemetry data doesn't start showing up,
+verify the AUT was built with the proper libs and flags, and that network communication over socket
+port 7934 is open from the AUT to hxScout.
+</p>
 
   <h2>Application Integration</h2>
 
@@ -62,7 +68,7 @@
     If you're developing a framework (e.g. OpenFL, Snow, heaps, etc) and want telemetry built in for
     easy access for your users,
     review <a href="https://github.com/jcward/openfl/compare/master...jcward:hxt_prototyping">my changeset</a>
-    for how I'm doing it for OpenFL and shoot me a tweet. My <a href="https://github.com/jcward/hxtelemetry/blob/master/test/DisplayingABitmap/">DisplayingABitmap test</a> is an OpenFL
+    for how I'm doing it for OpenFL and shoot me a tweet. My <a href="https://github.com/jcward/hxtelemetry/blob/master/test/DisplayingABitmap/">DisplayingABitmap test</a> (which is also the demo AUT above) is an OpenFL
     testcase that uses this modified framework, with a special consideration that it will provide an API
     compatible with Flash's Telemetry API.
   </p>

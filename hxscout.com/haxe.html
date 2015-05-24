@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="description" content="This is an example of a meta description. This will often show up in search results.">
+  <link rel="stylesheet" href="hxscout.css" />
+</head>
+<body>
+
+<div class="container">
+  <h1><a href="/" style="text-decoration:none"><img src="hxScout.svg"/> hxScout</a></h1>
+
+  <p>
+    <a href="https://raw.githubusercontent.com/jcward/hxScout/master/hxscout.png"><img class="screenshot" src="hxscout_sm.png"/></a>
+    hxScout currently supports profiling Haxe C++ applications (targetting Windows, Mac OS X, Linux, Android, iOS, and more.) The application under test simply includes the hxtelemetry library, which sends telemetry data to hxScout over a socket, allowing for both local (e.g. same computer) and remote (e.g. android phone) profiling.
+  </p>
+
+  <h2>Beta Status</h2>
+  <p>Please note that hxScout is in beta - some features are partially implemented, others are planned, there are probably bugs, and APIs will likely change. Please submit any feedback (comments, bugs, feature requests) to me via <a href="https://twitter.com/jeff__ward">Twitter</a> or <a href="https://github.com/jcward/hxScout/issues">github</a>.</p>
+  <h2>Download <i class="icon-download-outline"></i></h2>
+  <p style="font-size:14px"><b>hxScout Version:</b> 0.2 Beta, ~4MB (Haxe version, SWF profiling unstable)</p>
+  <p style="text-align:center;margin: 40px 0 0 0">
+    <a class="download" href="hxScout-0.2_Beta-win.zip" onclick="ga('send', 'event', 'download-0.2', 'win');">Windows <i class="icon-windows"></i></a>
+    <a class="download" href="hxScout-0.2_Beta-mac.tgz" onclick="ga('send', 'event', 'download-0.2', 'mac');">Mac OS X <i class="icon-apple"></i></a>
+    <a class="download" href="hxScout-0.2_Beta-linux.tgz" onclick="ga('send', 'event', 'download-0.2', 'linux');">Linux <i class="icon-linux"></i></a>
+  </p>
+
+  <h2>Beta Usage <i class="icon-info-outline"></i></h2>
+  <p>Since hxScout and hxtelemetry are currently in beta, profiling Haxe applications reuires some adjustment to your haxe environment. Applications under test (AUTs) must be built against my github forks of <a href="https://github.com/jcward/hxcpp/tree/integration">hxcpp (integration branch)</a> and <a href="https://github.com/jcward/hxtelemetry/tree/master">hxtelemetry (master branch)</a>. OpenFL-based apps must be built against my fork of <a href="https://github.com/jcward/openfl/tree/hxt_prototyping">openfl (hxt_prototyping branch)</a> which was tested with lime 2.3.3.</p>
+
+  <p>
+    If changing your haxe environment is too much hassle, you can download and try
+    a compiled demo application, just to see how profiling works. Availalble for
+    <a href="hxtelemetry_test-win.zip" onclick="ga('send', 'event', 'download-test', 'win');">windows</a>,
+    <a href="hxtelemetry_test-mac.zip" onclick="ga('send', 'event', 'download-test', 'mac');">mac</a>,
+    <a href="hxtelemetry_test-linux.zip" onclick="ga('send', 'event', 'download-test', 'linux');">linux</a>.
+  </p>
+
+  <h2>Application Integration</h2>
+
+  <p>
+    To generate telemetry data, applications under test must:
+    <ul>
+      <li>Include the hxtelemetry library, <span class="mono">-cp &lt;path/to/hxtelemetry&gt;</span></li>
+      <li>Set two compiler defines, <span class="mono">-D HXCPP_STACK_TRACE -D HXCPP_TELEMETRY</span></li>
+      <li>Instantiate the telemetry object: <span class="mono">var hxt = new HxTelemetry();</span></li>
+      <li>Call <span class="mono">hxt.advance_frame()</span> each frame.
+    </ul>
+  </p>
+
+  <p>
+    Example apps are given in the <a href="https://github.com/jcward/hxtelemetry/tree/master/test">hxtelemetry/test</a> directory. The HxTelemetry object can be <a href="https://github.com/jcward/hxtelemetry/blob/master/test/array_realloc/Main.hx#L7-L9">configured</a> as shown in some examples.
+  </p>
+
+  <p>
+    <i>Multi-threading note:</i> hxtelemetry is designed to work with multi-threaded apps. Each thread should instantiate an hxtelemetry object and call advance_frame. See my <a href="https://github.com/jcward/hxtelemetry/tree/master/test/multithread">multi-threaded test</a>.
+  </p>
+
+
+  <h2>Framework Integration</h2>
+
+  <p>
+    If you're developing a framework (e.g. OpenFL, Snow, heaps, etc) and want telemetry built in for
+    easy access for your users,
+    review <a href="https://github.com/jcward/openfl/compare/master...jcward:hxt_prototyping">my changeset</a>
+    for how I'm doing it for OpenFL and shoot me a tweet. My <a href="https://github.com/jcward/hxtelemetry/blob/master/test/DisplayingABitmap/">DisplayingABitmap test</a> is an OpenFL
+    testcase that uses this modified framework, with a special consideration that it will provide an API
+    compatible with Flash's Telemetry API.
+  </p>
+
+
+  <hr style="margin-top:40px">
+  <div style="font-size:12px;line-height:110%">
+    <p>Adobe Scout, Adobe&reg; AIR&reg;, and Adobe&reg; Flash&reg; are either registered trademarks or trademarks of Adobe Systems Incorporated in the United States and/or other countries.</p>
+    <p>hxScout is not affiliated with Adobe Systems Incorporated. hxScout is <a href="https://github.com/jcward/hxScout/blob/master/LICENSE">licensed</a> under the MIT license.</p>
+  </div>
+</div>
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-30602079-6', 'auto');
+  ga('send', 'pageview');
+
+</script>
+</body>
+</html>

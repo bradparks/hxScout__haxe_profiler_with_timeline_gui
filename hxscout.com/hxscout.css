@@ -1,7 +1,7 @@
 body {
   padding:1% 8%;
   font-family:helvetica,arial;
-  font-size:18px;
+  font-size:20px;
   color:#444;
   background-color:#eee;
   line-height:140%;
@@ -24,12 +24,12 @@ h2 { margin-bottom: 12px; }
 }
 .container {
   position:relative;
-  background-color:rgba(240,240,240,0.6);
+  background-color:rgba(240,240,240,0.8);
   padding: 15px 40px 40px 40px;
   border-radius: 3px;
   max-width:1000px;
   margin: 0 auto;
-  box-shadow: 1px 1px 128px rgba(64,64,64,0.2);
+  box-shadow: 1px 1px 128px rgba(64,64,64,0.2), 1px 8px 16px rgba(0,0,0,0.2);
   border: 1px solid #ccc;
 }
 a, a:link, a:visited, a:active {text-decoration: underline; color: #69c; transition:color .1s linear; }
@@ -46,6 +46,9 @@ background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAIA
 }
 h1 img { height:60px; }
 h2 i { display:none; }
+h1 a {
+    color: rgba(255,255,255,0.5)!important;
+}
 
 .download {
   background-color: #444;

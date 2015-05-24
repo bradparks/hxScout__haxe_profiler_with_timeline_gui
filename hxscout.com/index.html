@@ -7,43 +7,20 @@
 <body>
 
 <div class="container">
-  <h1><img src="hxScout.svg"/> hxScout</h1>
+  <h1><a href="/" style="text-decoration:none"><img src="hxScout.svg"/> hxScout</a></h1>
 
   <p>
     <a href="https://raw.githubusercontent.com/jcward/hxScout/master/hxscout.png"><img class="screenshot" src="hxscout_sm.png"/></a>
     A free, cross-platform and <a href="https://github.com/jcward/hxScout">open source</a>
-    alternative to Adobe Scout, hxScout is a profiling tool for SWF (and soon Haxe*) applications
-    that displays frame timing, memory usage, and profiling information.
+    alternative to Adobe Scout, hxScout is a profiling tool for SWF and Haxe applications
+    that displays profiling information such as timing, memory usage, object allocation, and more.
   </p>
 
-  <h2>Download <i class="icon-download-outline"></i></h2>
-  <p style="font-size:14px"><b>Version:</b> 0.1 Beta, ~4MB</p>
-  <p>Please note that hxScout is in beta - some features are partially implemented, others are planned, and there are probably bugs. Please submit any feedback (comments, bugs, feature requests) to me via <a href="https://twitter.com/jeff__ward">Twitter</a> or <a href="https://github.com/jcward/hxScout/issues">github</a>.</p>
+  <h2>Select Environment</h2>
   <p style="text-align:center;margin: 40px 0 0 0">
-    <a class="download" href="hxScout-0.1_Beta-win.zip" onclick="ga('send', 'event', 'download', 'win');">Windows <i class="icon-windows"></i></a>
-    <a class="download" href="hxScout-0.1_Beta-mac.tgz" onclick="ga('send', 'event', 'download', 'mac');">Mac OS X <i class="icon-apple"></i></a>
-    <a class="download" href="hxScout-0.1_Beta-linux.tgz" onclick="ga('send', 'event', 'download', 'linux');">Linux <i class="icon-linux"></i></a>
+    <a class="download" href="./swf.html" onclick="ga('send', 'event', 'env', 'swf');">Flash / SWF</a>
+    <a class="download" href="./haxe.html" onclick="ga('send', 'event', 'env', 'haxe');">Haxe</a>
   </p>
-
-  <h2>Usage <i class="icon-info-outline"></i></h2>
-  <p>Profiling with hxScout works just like with Scout. You need to setup a <span class="mono">.telemetry.cfg</span> file and compile your SWF with <span class="mono">-advanced-telemetry</span> as
-  documented in Scout's <a href="http://www.adobe.com/devnet/scout/articles/adobe-scout-getting-started.html">Getting Started Guide</a>.</p>
-
-  <p>Once setup, run hxScout, then open this <a href="test_profalloc.swf">test swf</a>. While timing and profiling information are displayed in any player, note that memory allocations are only displayed from a debug Flash Player (or AIR).</p>
-
-  <h2>Features <i class="icon-th-list-outline"></i></h2>
-  <p>In the future, this section will compare the feature sets of Adobe Scout and hxScout side-by-side. In version 0.1 beta,
-  hxScout displays timing, profiling and memory allocation data. hxScout does not support rendering or Stage3D
-  profiling, and it doesn't currently have all the UI options that Scout does (sorting information, top-down and bottom-up
-  options, customizable panes, etc.)</p>
-
-  <p>The goal is not to replicate every feature of Scout, but to provide a tool that supports the
-  highest ROI profiling functions, free for all developers on all platforms, that supports the
-  Flash Platform and beyond.</p>
-
-  <h3>* Haxe Profiling Support</h3>
-  Support for profiling Haxe applications (hxcpp first and foremost, perhaps neko and other targets) is planned. For now,
-  hxScout functionality will be vetted against the existing FLM telemetry generators (Flash Player and AIR).
 
   <hr style="margin-top:40px">
   <div style="font-size:12px;line-height:110%">

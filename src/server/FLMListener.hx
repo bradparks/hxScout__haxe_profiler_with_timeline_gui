@@ -228,12 +228,14 @@ class FLMListener {
 					cur_frame.duration += t.delta;
           var count = data['count']==null ? 1 : data['count'];
 
+#if debug
 					if (t.span>cur_frame.duration) {
 						if (!amf_mode || (name!='.network.localconnection.idle' &&
                               name!='.rend.screen')) {
 							trace("??? Event larger ("+t.span+") than current frame ("+cur_frame.duration+"): "+data);
 						}
 					}
+#end
 
 					var self_time = t.span;
 					var lookback = t.span-t.delta;

@@ -120,7 +120,6 @@ class FLMListener {
       //cfg.allocations = false;
       cfg.port = output_port;
       cfg.app_name = "HxScout-FLMListener-"+inst_id;
-      cfg.singleton_instance = false;
       hxt = new hxtelemetry.HxTelemetry(cfg);
     }
 #end

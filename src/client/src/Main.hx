@@ -44,6 +44,7 @@ class Main extends Sprite {
       //                   ui_server_request(on_server_connected);
       //                 });
     #else
+      trace("This mode is pretty much going away...");
       function on_server_connected(s:Socket) {
         trace("Got socket: "+s);
         addChildAt(gui = new HXScoutClientGUI(), 0);
@@ -139,6 +140,7 @@ class Main extends Sprite {
     return s;
   }
 
+  /*
   function setup_frame_data_receiver(server:Socket) {
     var frame_data_length:UInt = 0;
 
@@ -165,6 +167,7 @@ class Main extends Sprite {
 
     stage.addEventListener(Event.ENTER_FRAME, on_enter_frame);
   }
+  */
 
 #if cpp
   function setup_flm_listener() {
@@ -667,6 +670,12 @@ class FLMSession {
     }
 
     var frame_data:FLMListener.Frame = data;
+
+    if (frame_data==null) {
+      trace(data);
+      throw("Warning, received null frame_data");
+      return;
+    }
 
     // For profiler samples && memory allocation stacks...
     if (frame_data.push_stack_strings!=null) {
